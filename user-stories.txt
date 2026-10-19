@@ -1,0 +1,119 @@
+US 01.01.01 As an entrant, I want to search for campsites.
+
+US 01.01.02 As an entrant, I want to filter campsites by location, date, and number of guests.
+
+US 01.01.03 As an entrant, I want to see a list of campsites based on my filters.
+
+US 01.01.04 As an entrant, I want to see campsite summary information including name, location, maximum occupancy, and rating.
+
+US 01.01.05 As an entrant, I want to see details of a campsite.
+
+US 01.01.06 As an entrant, I want to join an active lottery from the campsite details screen.
+
+US 01.02.01 As an entrant, I want to join the waiting list for a campsite lottery.
+
+US 01.02.02 As an entrant, I want to leave the waiting list for a campsite lottery.
+
+US 01.03.01 As an entrant, I want to receive a notification when I win the campsite lottery.
+
+US 01.03.02 As an entrant, I want to receive a notification when I lose the campsite lottery.
+
+US 01.04.01 As an entrant, if I win the lottery, I want to see available dates that I can reserve the campsite for.
+
+US 01.04.02 As an entrant, if I win a multiple campsite lottery, I want to choose which campsite to reserve and which dates I want.
+
+US 01.04.03 As an entrant, if I win the lottery, I want to decline a reservation if I changed my mind or if none of the remaining dates work for me.
+
+US 01.05.01 As an entrant, I want to receive confirmation of my campsite reservation.
+
+US 01.05.02 As an entrant, I want to receive reservation by notification or downloadable CSV.
+
+US 01.06.01 As an entrant, I want to view a list of my active reservations.
+
+US 01.06.02 As an entrant, I want to view a list of my past reservations.
+
+US 01.07.01 As an entrant, I want to cancel my campsite reservation.
+
+US 01.07.02 As an entrant, I want to receive confirmation of my campsite cancellation by notification or downloadable CSV.
+
+US 01.07.03 As an entrant, I want to update my personal information, such as name, email, and phone number, on my profile.
+
+US 01.08.01 As an entrant, I want to delete my profile.
+
+US 01.09.01 As an entrant, I want to be identified by my device, so that I do not have to use a username and password.
+
+US 01.10.01 As an entrant, I want to opt out of receiving notifications.
+
+US 01.11.01 As an entrant, I want to see the app policy and guidelines.
+
+US 01.12.01 As an entrant, I want to view campsite details by scanning the promotional QR code.
+
+US 01.13.01 As an entrant, I want to give a rating for a campsite.
+
+US 02.01.01 As a campsite owner, I want to register my campsite with the app.
+
+US 02.01.02 As a campsite owner, I want to provide campsite details including name, location, description (amenities), maximum occupancy, map location, optional image, and tags.
+
+US 02.01.03 As a campsite owner, I want to update details about my campsite.
+
+US 02.01.04 As a campsite owner, I want to view details of my campsite.
+
+US 02.02.01 As a campsite owner, I want the system to generate a unique QR code that links to the campsite details.
+
+US 02.03.01 As a campsite owner, I want to view a list of my campsites.
+
+US 02.04.01 As a campsite owner, I want to list my campsite in a lottery for a certain period.
+
+US 02.04.02 As a campsite owner, I want be able to list multiple campsites in a lottery for a certain period.
+
+US 02.04.03 As a campsite owner, I want to set a registration period.
+
+US 02.04.04 As a campsite owner, I want to set a booking period.
+
+US 02.04.05 As a campsite owner, I want to set the number of lottery winners.
+
+US 02.04.06 As a campsite owner, I want to update my campsite lottery listing.
+
+US 02.04.07 As a campsite owner, I want to optionally set a capacity for my lottery waitlist.
+
+US 02.05.01 As a campsite owner, I want the system to automatically draw winners after the registration period ends.
+
+US 02.06.01 As a campsite owner, I want to view the currently booked dates for my campsite.
+
+US 02.07.01 As a campsite owner, I want to view a list of active reservations.
+
+US 02.07.02 As a campsite owner, I want to view a list of past reservations.
+
+US 02.07.03 As a campsite owner, I want to view a list of cancelled reservations.
+
+US 02.08.01 As a campsite owner, I want to reject a reservation.
+
+US 02.09.01 As a campsite owner, I want to view a list of entrants who have joined the waitlist for my campsite lottery.
+
+US 02.10.01 As a campsite owner, I want to send notifications to entrants who have joined the waitlist for my campsite lottery.
+
+US 02.10.02 As a campsite owner, I want to view a list of all notifications I have sent.
+
+US 02.11.01 As a campsite owner, I want entrants to confirm that they have read the campsite rules and policies before confirming their reservation.
+
+US 02.12.01 As a campsite owner, I want to message a user who is reserving my campsite.
+
+US 03.01.01 As an admin, I want to remove registered campsites.
+
+US 03.02.01 As an admin, I want to remove profiles.
+
+US 03.03.01 As an admin, I want to remove images.
+
+US 03.04.01 As an admin, I want to browse campsites.
+
+US 03.05.01 As an admin, I want to browse profiles.
+
+US 03.06.01 As an admin, I want to browse uploaded images so I can remove them if necessary.
+
+US 03.07.01 As an admin, I want to remove campsite owners that violate app policy.
+
+US 03.08.01 As an admin, I want to review logs of all notifications.
+
+US 03.11.01 As an admin, I should be able to be a campsite owner and/or entrant with my admin profile.
+
+US 03.12.01 As an admin, I want to review logs of all messages from campsite owners to entrants who reserved their campsite.
