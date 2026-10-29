@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "773018583817",
+    "project_id": "spinach-5f826",
+    "storage_bucket": "spinach-5f826.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:773018583817:android:ee41838ad0488829cd09d8",
+        "android_client_info": {
+          "package_name": "com.example.spinach"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCSPsrnsjw1Ldp23jzabijbJ3WKE9sQ2hM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
