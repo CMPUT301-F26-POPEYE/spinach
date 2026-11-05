@@ -2,28 +2,29 @@ package com.example.spinach
 
 import android.content.Context
 import android.provider.Settings
-/*
+/**
 *User
 * Represents a person using the app. User can be identified by their device ID.
 * Stores user contact info, notification preference, roles they can be. A single user can be an owner/entrant/admin and can switch between the roles.
 *
-* To cover: (todo) US 01.09.01, US 01.07.03, US 01.10.01, (todo) US 03.11.01
+* To cover: (todo) US 01.09.01, US 01.07.03, US 01.10.01, (todo) US 03.11.01, user info
+* @constructor Creates a new User object.
+* @property deviceId Unique, device-based identifier. Acts as the user's ID (US 01.09.01).
+* @property name User's name.
+* @property email User's email. (optional)
+* @property phoneNumber User's phone number (optional)
+* @property notificationsEnabled Whether the user wants to receive notifications (US 01.10.01).
+* @property roles All roles this user is allowed to act as. Everyone is an ENTRANT by default.
+* @property activeRole The role this user is currently acting as.
 *
  */
 class User (
-    /** Unique, device-based identifier. Acts as the user's ID (US 01.09.01). */
     var deviceId: String = "",
-    var name: String? = null,
-    var email: String? = null,        // optional
-    var phoneNumber: String? = null,  // optional
-
-    /** true = opted in to notifications (US 01.10.01). Default is opted out. */
+    var name: String = "",
+    var email: String? = null,
+    var phoneNumber: String? = null,
     var notificationsEnabled: Boolean = false,
-
-    /** All roles this user is allowed to act as. Everyone is an ENTRANT by default. */
-    var roles: MutableSet<Role> = mutableSetOf(Role.ENTRANT),
-
-    /** The role the user is currently acting as. */
+    var roles: MutableList<Role> = mutableListOf(Role.ENTRANT),
     var activeRole: Role = Role.ENTRANT
     ) {
 
@@ -39,6 +40,13 @@ class User (
         /**
          * Updates contact info (US 01.07.03). Returns false and changes nothing if
          * the name is empty or a non-empty email is malformed.
+         * If validation fails, nothing is changed.
+         *
+         * @param name The new display name. Must not be `null` or blank.
+         * @param email The new email, or `null`/blank to clear it. Must be valid if non-blank.
+         * @param phoneNumber The new phone number, or `null`/blank to clear it.
+         * @return `true` if the profile was updated, `false` if validation failed.
+         *
          */
         fun updateProfile(name: String?, email: String?, phoneNumber: String?): Boolean {
             if (name.isNullOrBlank()) return false
@@ -52,26 +60,32 @@ class User (
 
         /**
          * Clears the personal info on this object (US 01.08.01).
-         * NOTE: this only wipes the local object. Actually removing the user's record
-         * from the database should be done by whatever handles persistence.
+         * Wipes only the current in-memory object. Does not affect the database.
+         *
          */
         fun clearProfile() {
-            name = null
+            name = ""
             email = null
             phoneNumber = null
             notificationsEnabled = false
         }
 
         // ---------------------------------------------------------------- roles
+    /**
+     * Checks if this user has a certain role.
+     * @param role The role to check for.
+     */
+    fun hasRole(role: Role): Boolean = role in roles
 
-        fun hasRole(role: Role): Boolean = role in roles
+    /** Grants a role to this user (e.g. when they register as an owner).
+     * @param role The role to grant.
+     */
+    fun addRole(role: Role) {
+        roles.add(role)
+    }
 
-        /** Grants a role to this user (e.g. when they register as an owner). */
-        fun addRole(role: Role) {
-            roles.add(role)
-        }
-
-        /** Removes a role. ENTRANT cannot be removed. Falls back to ENTRANT if it was active. */
+        /** Removes a role. ENTRANT cannot be removed. Falls back to ENTRANT if it was active.
+         * @param role The role to remove. */
         fun removeRole(role: Role) {
             if (role == Role.ENTRANT) return
             roles.remove(role)
@@ -81,6 +95,7 @@ class User (
         /**
          * Switches which role the user is currently acting as (US 03.11.01).
          * Returns false if the user doesn't hold that role.
+         * @param role The role to switch to.
          */
         fun switchRole(role: Role): Boolean {
             if (role !in roles) return false
@@ -91,17 +106,30 @@ class User (
         companion object {
             private val EMAIL_REGEX = Regex("^[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}$")
 
+            /**
+             * Checks whether a string looks like a valid email address.
+             *
+             * This is a basic format check (something@domain.tld), not a guarantee that
+             * the address exists. Surrounding whitespace is ignored.
+             *
+             * @param email The string to check. May be `null`.
+             * @return `true` if [email] is non-null and matches the expected format.
+             */
             fun isValidEmail(email: String?): Boolean =
                 email != null && EMAIL_REGEX.matches(email.trim())
 
             /**
              * Reads this device's unique ID so the user can be identified without
              * a username/password (US 01.09.01).
+             * @param context The app's context.
+             * @return The device's unique ID.
              */
             fun readDeviceId(context: Context): String =
                 Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
 
-            /** Convenience factory: creates a new User tied to this device. */
+            /** Creates a new User tied to this device.
+             * @param context The app's context.
+             * */
             fun fromDevice(context: Context, name: String?): User =
                 User(deviceId = readDeviceId(context), name = name)
         }
@@ -112,15 +140,19 @@ class User (
         // =====================================================================
 
         // --- Notification (collaborator) ---
+        //@Exclude
         // fun getNotifications(): List<Notification> = TODO()
 
         // --- Reservation (collaborator) ---
+        //@Exclude
         // fun getReservations(): List<Reservation> = TODO() // reservations where userId == deviceId
 
         // --- Message (collaborator) ---
+        //@Exclude
         // fun getMessages(): List<Message> = TODO() // messages where receiverId == deviceId
 
         // --- Lottery (collaborator) ---
+        // @Exclude
         // fun getJoinedLotteries(): List<Lottery> = TODO() // lotteries this user is waitlisted in
     }
 
