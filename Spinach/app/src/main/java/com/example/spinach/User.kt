@@ -2,6 +2,9 @@ package com.example.spinach
 
 import android.content.Context
 import android.provider.Settings
+
+// This code was produced partly by Claude Sonnet 5.5, 2/11/2026 over the prompt "How can I implement this CRC card in the wiki?"
+
 /**
 *User
 * Represents a person using the app. User can be identified by their device ID.
@@ -130,7 +133,7 @@ class User (
             /** Creates a new User tied to this device.
              * @param context The app's context.
              * */
-            fun fromDevice(context: Context, name: String?): User =
+            fun fromDevice(context: Context, name: String): User =
                 User(deviceId = readDeviceId(context), name = name)
         }
 
