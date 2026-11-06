@@ -12,23 +12,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.spinach.ui.theme.SpinachTheme//T-for lottery
-import com.example.spinach.ui.LotteryDrawEffect
+import com.example.spinach.ui.CreateLotteryScreen//T-for lottery
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
         setContent {
             SpinachTheme {
-                LotteryDrawEffect()//T-for lottery
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
+                    CreateLotteryScreen(
+                        campsiteId = "test-campsite-talha",// this is hardcodedm, will need to be changed once all owner UI is complete
+                        userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "",
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
             }
         }
+    }
+    override fun onResume() {
+        super.onResume()
+        LotteryRepository().drawDueLotteries()
     }
 }
 

@@ -352,5 +352,28 @@ class LotteryAcceptanceCriteriaTest {
             observed.size > 1
         )
     }
+
+    @Test
+    fun onlyWinnersCanReserveDuringBookingPeriod() {
+        val l = lottery(entrants = listOf("user-1", "user-2"))
+
+        // Before the draw, nobody can reserve
+        assertFalse(l.canReserve("user-1", bookingStart))
+
+        // Draw the winners
+        l.draw()
+
+        // A winner can reserve during the booking period
+        val winner = l.winners.first()
+        assertTrue(l.canReserve(winner, bookingStart))
+        assertTrue(l.canReserve(winner, bookingEnd))
+
+        // A user who did not win cannot reserve
+        assertFalse(l.canReserve("not-a-winner", bookingStart))
+
+        // Even winners cannot reserve outside the booking period
+        assertFalse(l.canReserve(winner, bookingStart - dayMs))
+        assertFalse(l.canReserve(winner, bookingEnd + dayMs))
+    }
 }
 

@@ -39,8 +39,25 @@ class Lottery(
     @Exclude// US 02.04.01, lot stays active until draw
     fun isActive(): Boolean = !drawn
 
-    fun allowsDates(dates: List<Long>): Boolean =//US 02.04.04, reservations dates should be in booking period
-        dates.all { it in bookingStart..bookingEnd }
+    @Exclude
+    fun isRegistrationOpen(now: Long): Boolean {
+        return now >= registrationStart &&
+                now < registrationEnd + 86_400_000L &&
+                !drawn
+    }
+
+    @Exclude
+    fun allowsDates(dates: List<Long>): Boolean =//selects atleast 1 date, within period, no date rej
+        dates.isNotEmpty() &&
+                dates.all { it in bookingStart..bookingEnd }
+
+    @Exclude
+    fun canReserve(userId: String, now: Long): Boolean {//checking conditions before entrant reserves
+        return drawn &&//finished selecting
+                winners.contains(userId) &&//wom
+                now >= bookingStart &&
+                now < bookingEnd + 86_400_000L//date checks
+    }
 
     fun registrationOver(now: Long): Boolean = now >= registrationEnd + 86_400_000L//checks if registration is over
 

@@ -9,6 +9,18 @@ class LotteryRepository {
     private val db = FirebaseFirestore.getInstance()
     fun create(lottery: Lottery, userId: String, onDone: (Result<String>) -> Unit) {// US 0.2.04.01, crating lottery for campsite
 
+        //This if function was created with the assistance of Open AI, Nov 5, 2026 "Create lottery test file
+        if (lottery.campsiteId.isBlank() || userId.isBlank()) {
+            onDone(
+                Result.failure(
+                    IllegalArgumentException(
+                        "You must be signed in and select a campsite before creating a lottery"
+                    )
+                )
+            )
+            return
+        }
+
         val error = lottery.validationError()//checking for all lot details
 
         if (error != null) {
