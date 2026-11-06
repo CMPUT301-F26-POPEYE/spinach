@@ -17,6 +17,8 @@ class Lottery(
     var winners: MutableList<String> = mutableListOf(),//ppl selected
     var losers: MutableList<String> = mutableListOf(),//not selected
     var drawn: Boolean = false,
+    var campsiteIds: MutableList<String> = mutableListOf(),// US 02.04.02, every campsite in this lottery
+    var waitlistCapacity: Int? = null,// US 02.04.07, null means no limit
 ) {
     // US 02.04.03, 02.04.04, 02.04.05
     @Exclude
@@ -33,6 +35,9 @@ class Lottery(
             return "Booking end can't be before booking start"
         if (winnerCount <= 0)
             return "Number of winners must be a whole number above 0"
+        val capacity = waitlistCapacity
+        if (capacity != null && capacity <= 0)
+            return "Waitlist capacity must be a whole number above 0"
         return null
     }
 
@@ -59,8 +64,20 @@ class Lottery(
                 now < bookingEnd + 86_400_000L//date checks
     }
 
-    fun registrationOver(now: Long): Boolean = now >= registrationEnd + 86_400_000L//checks if registration is over
 
+    // US 02.04.02
+    @Exclude
+    fun campsites(): List<String> = if (campsiteIds.isEmpty()) listOf(campsiteId) else campsiteIds
+
+    // US 02.04.07
+    @Exclude
+    fun hasWaitlistRoom(): Boolean {
+        val capacity = waitlistCapacity ?: return true
+        return waitlist.size < capacity
+    }
+
+
+    fun registrationOver(now: Long): Boolean = now >= registrationEnd + 86_400_000L//checks if registration is over
     // US 02.05.01
     fun draw() {
 
