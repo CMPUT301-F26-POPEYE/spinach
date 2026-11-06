@@ -16,6 +16,12 @@ import androidx.compose.ui.Modifier
 import com.example.spinach.ui.OwnerApp
 import com.example.spinach.ui.theme.SpinachTheme
 import com.google.firebase.auth.FirebaseAuth
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,12 +48,51 @@ class MainActivity : ComponentActivity() {
                     if (ownerId.isNotBlank()) CampsiteRepository().ownerCampsites { campsites = it }
                 }
 
+                var selectedRole by remember {
+                    mutableStateOf("Owner")
+                }
+
+
+                //Current owner/entrant navigation is just a role swithc
+                //both screens functional but final integration needed
+                //for consistent user identiity, owner authorization , access to all entrant features. NEEDS WORK
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    OwnerApp(
-                        ownerId = ownerId,
-                        campsites = campsites,
-                        modifier = Modifier.padding(innerPadding),
-                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedButton(
+                                onClick = { selectedRole = "Owner" },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Owner")
+                            }
+
+                            OutlinedButton(
+                                onClick = { selectedRole = "Entrant" },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Entrant")
+                            }
+                        }
+
+                        if (selectedRole == "Owner") {
+                            OwnerApp(
+                                ownerId = ownerId,
+                                campsites = campsites,
+                                modifier = Modifier.weight(1f)
+                            )
+                        } else {
+                            SearchScreen(
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                 }
             }
         }
