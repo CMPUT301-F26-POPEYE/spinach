@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -28,6 +31,8 @@ private sealed interface OwnerScreen {
     data object Home : OwnerScreen
     data object Reservations : OwnerScreen
     data object CreateLottery : OwnerScreen
+    data object RegisterCampsite : OwnerScreen
+    data class EditCampsite(val id: String, val name: String) : OwnerScreen
     data class CampsiteMenu(val id: String, val name: String) : OwnerScreen
     data class BookedDates(val id: String, val name: String) : OwnerScreen
     data class Waitlist(val id: String, val name: String) : OwnerScreen
@@ -38,6 +43,7 @@ private fun backTarget(screen: OwnerScreen): OwnerScreen = when (screen) {
     is OwnerScreen.BookedDates -> OwnerScreen.CampsiteMenu(screen.id, screen.name)
     is OwnerScreen.Waitlist -> OwnerScreen.CampsiteMenu(screen.id, screen.name)
     is OwnerScreen.Notify -> OwnerScreen.CampsiteMenu(screen.id, screen.name)
+    is OwnerScreen.EditCampsite -> OwnerScreen.CampsiteMenu(screen.id, screen.name)
     else -> OwnerScreen.Home
 }
 
@@ -64,6 +70,7 @@ fun OwnerApp(ownerId: String, campsites: List<Campsite>, modifier: Modifier = Mo
                 onOpenCampsite = { screen = OwnerScreen.CampsiteMenu(it.id, it.name) },
                 onOpenReservations = { screen = OwnerScreen.Reservations },
                 onCreateLottery = { screen = OwnerScreen.CreateLottery },
+                onRegisterCampsite = { screen = OwnerScreen.RegisterCampsite },
                 modifier = Modifier.weight(1f),
             )
             OwnerScreen.Reservations -> OwnerReservationsScreen(
@@ -75,8 +82,28 @@ fun OwnerApp(ownerId: String, campsites: List<Campsite>, modifier: Modifier = Mo
                 userId = ownerId,
                 modifier = Modifier.weight(1f),
             )
+            // The new campsite shows up in the list straight away through ownerCampsites' listener.
+            OwnerScreen.RegisterCampsite -> CampsiteFormScreen(
+                existing = null,
+                onSaved = { screen = OwnerScreen.Home },
+                modifier = Modifier.weight(1f),
+            )
+            is OwnerScreen.EditCampsite -> {
+                // campsites only holds this owner's campsites, so another owner's id finds nothing.
+                val campsite = campsites.find { it.id == current.id }
+                if (campsite == null) {
+                    NotYourCampsite(Modifier.weight(1f))
+                } else {
+                    CampsiteFormScreen(
+                        existing = campsite,
+                        onSaved = { screen = OwnerScreen.CampsiteMenu(current.id, current.name) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
             is OwnerScreen.CampsiteMenu -> CampsiteMenu(
-                name = current.name,
+                campsite = campsites.find { it.id == current.id },
+                onEdit = { screen = OwnerScreen.EditCampsite(current.id, current.name) },
                 onBookedDates = { screen = OwnerScreen.BookedDates(current.id, current.name) },
                 onWaitlist = { screen = OwnerScreen.Waitlist(current.id, current.name) },
                 onNotify = { screen = OwnerScreen.Notify(current.id, current.name) },
@@ -108,6 +135,7 @@ private fun OwnerHomeScreen(
     onOpenCampsite: (Campsite) -> Unit,
     onOpenReservations: () -> Unit,
     onCreateLottery: () -> Unit,
+    onRegisterCampsite: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -127,6 +155,11 @@ private fun OwnerHomeScreen(
             }
         }
         item { Text("My campsites", style = MaterialTheme.typography.titleMedium) }
+        item {
+            Button(onClick = onRegisterCampsite, modifier = Modifier.fillMaxWidth()) {
+                Text("Register a campsite")
+            }
+        }
         if (campsites.isEmpty()) {
             item { Text("No campsites yet.") }
         } else {
@@ -142,19 +175,44 @@ private fun OwnerHomeScreen(
     }
 }
 
+/**
+ * CampsiteMenu
+ * The owner view of one of their campsites: every stored detail, a button to edit them,
+ * and the buttons for booked dates, the lottery waitlist and notifications.
+ *
+ * To cover:
+ * - US 02.01.04 As a campsite owner, I want to view details of my campsite.
+ *
+ * @param campsite The campsite to show, or null when it is not one of this owner's campsites.
+ * @param onEdit Called when the owner taps Edit details.
+ * @param onBookedDates Called when the owner taps Booked dates.
+ * @param onWaitlist Called when the owner taps Lottery waitlist.
+ * @param onNotify Called when the owner taps Notify the waitlist.
+ * @param modifier Modifier for the screen's outer column.
+ */
 @Composable
 private fun CampsiteMenu(
-    name: String,
+    campsite: Campsite?,
+    onEdit: () -> Unit,
     onBookedDates: () -> Unit,
     onWaitlist: () -> Unit,
     onNotify: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // campsites only holds this owner's campsites, so another owner's campsite is not found.
+    if (campsite == null) {
+        NotYourCampsite(modifier)
+        return
+    }
     Column(
-        modifier = modifier.padding(16.dp),
+        modifier = modifier.verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(name, style = MaterialTheme.typography.titleLarge)
+        Text(campsite.name.ifEmpty { "Unnamed campsite" }, style = MaterialTheme.typography.titleLarge)
+        ownerDetailLines(campsite).forEach { Text(it) }
+        Button(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
+            Text("Edit details")
+        }
         OutlinedButton(onClick = onBookedDates, modifier = Modifier.fillMaxWidth()) {
             Text("Booked dates")
         }
@@ -167,6 +225,36 @@ private fun CampsiteMenu(
     }
 }
 
+/**
+ * Shown instead of the owner view or the edit form when the campsite is not one of the
+ * current owner's campsites (US 02.01.03, US 02.01.04).
+ *
+ * @param modifier Modifier for the message.
+ */
+@Composable
+private fun NotYourCampsite(modifier: Modifier = Modifier) {
+    Text(
+        "You can only view and edit campsites you own.",
+        modifier = modifier.padding(16.dp),
+    )
+}
+
+/**
+ * The detail lines of the owner view (US 02.01.04).
+ *
+ * @param campsite The campsite to describe.
+ * @return Its location, description, maximum occupancy, map coordinates, tags, image and QR code.
+ */
+fun ownerDetailLines(campsite: Campsite): List<String> = buildList {
+    add("Location: ${campsite.location}")
+    add("Description: ${campsite.description}")
+    add("Max occupancy: ${campsite.maxOccupancy}")
+    add("Map: ${campsite.mapCoordinates.latitude}, ${campsite.mapCoordinates.longitude}")
+    add("Tags: " + campsite.tags.joinToString(", ").ifEmpty { "None" })
+    add("Image: " + campsite.images.joinToString(", ").ifEmpty { "None" })
+    add("QR code: " + campsite.qrCode.ifEmpty { "Not generated yet" })
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun OwnerAppPreview() {
@@ -174,7 +262,7 @@ private fun OwnerAppPreview() {
         OwnerApp(
             ownerId = "preview",
             campsites = listOf(
-                Campsite(id = "c1", name = "Lakeside Site 4"),
+                Campsite(id = "c1", name = "Lakeside Site 4", location = "Jasper, AB", maxOccupancy = 6),
                 Campsite(id = "c2", name = "Pine Ridge"),
             ),
         )

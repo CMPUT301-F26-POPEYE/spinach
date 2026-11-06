@@ -21,7 +21,7 @@ import com.google.firebase.firestore.GeoPoint
  * @property ratings individual ratings (1.0–5.0) left by entrants.
  * @property reviews review comments, parallel to [ratings].
  */
-
+//this code was partly produced by claude with the promt, "How should i go about making this class" nov 4 2026
 
 
 class Campsite (

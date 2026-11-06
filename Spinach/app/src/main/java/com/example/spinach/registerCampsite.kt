@@ -5,7 +5,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
 
-
+//this code was partly produced by claude with the promt, "How should i go about solving these issues" nov 5 2026
 class CampsiteRepository{
 
     private val db = FirebaseFirestore.getInstance()
