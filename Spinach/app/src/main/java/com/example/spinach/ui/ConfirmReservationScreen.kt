@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.spinach.CampsiteRepository
+import com.example.spinach.CampsiteRulesRepository
 import com.example.spinach.EntrantReservationRepository
 import com.example.spinach.EntrantReservationRules
 import com.example.spinach.Lottery
@@ -69,6 +70,7 @@ fun ConfirmReservationScreen(
     var booked by remember { mutableStateOf<List<Long>>(emptyList()) }
     var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var rulesAcknowledged by remember { mutableStateOf(false) }
+    var rulesText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmation by remember { mutableStateOf<String?>(null) }
 
@@ -95,6 +97,13 @@ fun ConfirmReservationScreen(
         onDispose { registration.remove() }
     }
 
+    // US 02.11.01: the rules the owner wrote for the chosen campsite
+    DisposableEffect(campsiteId) {
+        rulesText = ""
+        val registration = CampsiteRulesRepository().listen(campsiteId) { rulesText = it?.text.orEmpty() }
+        onDispose { registration.remove() }
+    }
+
     ConfirmReservationContent(
         campsiteIds = campsiteIds,
         names = names,
@@ -103,11 +112,14 @@ fun ConfirmReservationScreen(
             campsiteId = it
             // the dates picked for another campsite may not be free here
             selected = emptySet()
+            // the other campsite has its own rules
+            rulesAcknowledged = false
         },
         days = days,
         bookedDates = booked,
         selectedDays = selected,
         onToggleDay = { day -> selected = if (day in selected) selected - day else selected + day },
+        rulesText = rulesText,
         rulesAcknowledged = rulesAcknowledged,
         onRulesChange = { rulesAcknowledged = it },
         error = error,
@@ -146,6 +158,7 @@ fun ConfirmReservationContent(
     bookedDates: List<Long>,
     selectedDays: Set<Long>,
     onToggleDay: (Long) -> Unit,
+    rulesText: String,
     rulesAcknowledged: Boolean,
     onRulesChange: (Boolean) -> Unit,
     error: String?,
@@ -235,6 +248,15 @@ fun ConfirmReservationContent(
 
             // US 02.11.01: the entrant must confirm they read the rules
             item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text("Campsite rules", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        text = rulesText.ifBlank { "The owner has not added any rules for this campsite." },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+            item {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -283,6 +305,7 @@ private fun ConfirmReservationPreview() {
             bookedDates = listOf(days[1]),
             selectedDays = setOf(days[2], days[3]),
             onToggleDay = {},
+            rulesText = "Quiet hours start at 10 pm. Fires only in the fire pit.",
             rulesAcknowledged = true,
             error = null,
             confirmation = null,

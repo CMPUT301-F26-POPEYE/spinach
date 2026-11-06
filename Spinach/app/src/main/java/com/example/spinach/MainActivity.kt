@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.spinach.ui.AdminApp
+import com.example.spinach.ui.EntrantApp
 import com.example.spinach.ui.OwnerApp
 import com.example.spinach.ui.UserLoginScreen
 import com.example.spinach.ui.UserProfileOptions
@@ -108,11 +110,10 @@ class MainActivity : ComponentActivity() {
                                     campsites = campsites,
                                     modifier = Modifier.weight(1f),
                                 )
-                                activeRole == User.Role.ADMIN -> Text(
-                                    "Admin tools aren't available yet.",
-                                    modifier = Modifier.weight(1f).padding(16.dp),
-                                )
-                                else -> SearchScreen(modifier = Modifier.weight(1f))
+                                // US 03.01.01 to 03.08.01, 03.12.01
+                                activeRole == User.Role.ADMIN -> AdminApp(modifier = Modifier.weight(1f))
+                                // Search, lotteries, reservations and the policy screen
+                                else -> EntrantApp(entrantId = current.id, modifier = Modifier.weight(1f))
                             }
                         }
                     }
