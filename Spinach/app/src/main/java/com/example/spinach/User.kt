@@ -9,8 +9,12 @@ import android.provider.Settings
 *User
 * Represents a person using the app. User can be identified by their device ID.
 * Stores user contact info, notification preference, roles they can be. A single user can be an owner/entrant/admin and can switch between the roles.
+ *
+ * Collaborators: Notification, Reservation, Lottery, Campsite. A user does not hold
+ * these. Each of them stores the user's ID instead, and `UserRepository` looks them
+ * up (getNotifications, getReservations, getJoinedLotteries, getOwnedCampsites).
 *
-* To cover: (todo) US 01.09.01, US 01.07.03, US 01.10.01, (todo) US 03.11.01, user info
+* To cover: US 01.09.01, US 01.07.03, US 01.10.01, US 03.11.01, user info and object
 * @constructor Creates a new User object.
 * @property deviceId Unique, device-based identifier. Acts as the user's ID (US 01.09.01).
 * @property name User's name.
@@ -136,26 +140,5 @@ class User (
             fun fromDevice(context: Context, name: String): User =
                 User(deviceId = readDeviceId(context), name = name)
         }
-
-        // =====================================================================
-        // STUBS: depend on classes that don't exist yet.
-        // Uncomment / fill in once Notification, Reservation, Message, Lottery exist.
-        // =====================================================================
-
-        // --- Notification (collaborator) ---
-        //@Exclude
-        // fun getNotifications(): List<Notification> = TODO()
-
-        // --- Reservation (collaborator) ---
-        //@Exclude
-        // fun getReservations(): List<Reservation> = TODO() // reservations where userId == deviceId
-
-        // --- Message (collaborator) ---
-        //@Exclude
-        // fun getMessages(): List<Message> = TODO() // messages where receiverId == deviceId
-
-        // --- Lottery (collaborator) ---
-        // @Exclude
-        // fun getJoinedLotteries(): List<Lottery> = TODO() // lotteries this user is waitlisted in
     }
 
