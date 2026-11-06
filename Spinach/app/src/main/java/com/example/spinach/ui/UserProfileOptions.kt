@@ -27,11 +27,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.spinach.AccountRepository
 import com.example.spinach.AccountRules
+import com.example.spinach.DeviceAccountStore
 import com.example.spinach.User
 import com.example.spinach.UserRepository
 import com.example.spinach.ui.theme.SpinachTheme
@@ -95,10 +97,15 @@ fun UserProfileOptions(
     var email by remember(user) { mutableStateOf(user.email.orEmpty()) }
     var phoneNumber by remember(user) { mutableStateOf(user.phoneNumber.orEmpty()) }
     var notificationsEnabled by remember(user) { mutableStateOf(user.notificationsEnabled) }
-    var deviceLogin by remember(user) { mutableStateOf(user.trustsDevice(deviceId)) }
+    val context = LocalContext.current
+    var deviceLogin by remember(user) {
+        mutableStateOf(user.trustsDevice(deviceId) && DeviceAccountStore(context).contains(user.username))
+    }
     var activeRole by remember(user) { mutableStateOf(user.activeRole) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
+    var confirmingDeviceLogin by remember { mutableStateOf(false) }
+    var deviceLoginPassword by remember { mutableStateOf("") }
     var confirmingDelete by remember { mutableStateOf(false) }
     var deletePassword by remember { mutableStateOf("") }
 
@@ -150,13 +157,43 @@ fun UserProfileOptions(
         )
     }
 
-    fun setDeviceLogin(enabled: Boolean) {
+    fun setDeviceTrusted(trusted: Boolean, onSaved: () -> Unit) {
         fun apply(on: Boolean) {
             if (on) user.trustDevice(deviceId) else user.untrustDevice(deviceId)
             deviceLogin = on
         }
-        apply(enabled)
-        saveChange(undo = { apply(!enabled) }, onSaved = {})
+        apply(trusted)
+        saveChange(undo = { apply(!trusted) }, onSaved = onSaved)
+    }
+
+    fun closeDeviceLoginDialog() {
+        confirmingDeviceLogin = false
+        deviceLoginPassword = ""
+    }
+
+    // Registering the device keeps the password on it, so the password is checked first.
+    fun enableDeviceLogin() {
+        val password = deviceLoginPassword
+        closeDeviceLoginDialog()
+        busy = true
+        status = ""
+        AccountRepository().confirmPassword(password)
+            .addOnSuccessListener {
+                if (DeviceAccountStore(context).save(user.username, user.name, password)) {
+                    setDeviceTrusted(true, onSaved = {})
+                } else {
+                    busy = false
+                    status = "Could not register this device"
+                }
+            }
+            .addOnFailureListener {
+                busy = false
+                status = AccountRepository.errorMessage(it)
+            }
+    }
+
+    fun disableDeviceLogin() {
+        setDeviceTrusted(false, onSaved = { DeviceAccountStore(context).remove(user.username) })
     }
 
     fun switchRole(role: User.Role) {
@@ -194,7 +231,10 @@ fun UserProfileOptions(
                 deleteTask.result // throws if the delete failed, so the login is kept
                 accounts.deleteAccount()
             }
-            .addOnSuccessListener { onProfileDeleted() }
+            .addOnSuccessListener {
+                DeviceAccountStore(context).remove(user.username)
+                onProfileDeleted()
+            }
             .addOnFailureListener {
                 busy = false
                 status = AccountRepository.errorMessage(it)
@@ -248,7 +288,7 @@ fun UserProfileOptions(
                 Text("Log in with this device")
                 Switch(
                     checked = deviceLogin,
-                    onCheckedChange = { setDeviceLogin(it) },
+                    onCheckedChange = { if (it) confirmingDeviceLogin = true else disableDeviceLogin() },
                     enabled = !busy,
                 )
             }
@@ -297,6 +337,29 @@ fun UserProfileOptions(
             Text("Delete my account")
         }
         Text(status)
+    }
+
+    if (confirmingDeviceLogin) {
+        AlertDialog(
+            onDismissRequest = { closeDeviceLoginDialog() },
+            title = { Text("Log in with this device?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Anyone using this device can log in as you with Login with passkey.")
+                    PasswordField(deviceLoginPassword, { deviceLoginPassword = it }, enabled = true)
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = deviceLoginPassword.isNotEmpty(), onClick = { enableDeviceLogin() }) {
+                    Text("Use this device")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { closeDeviceLoginDialog() }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 
     if (confirmingDelete) {

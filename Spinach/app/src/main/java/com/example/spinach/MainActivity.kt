@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.example.spinach.ui.OwnerApp
 import com.example.spinach.ui.UserLoginScreen
 import com.example.spinach.ui.UserProfileOptions
@@ -74,19 +76,18 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                // Only hosts can switch. Entrants have one role.
-                                if (current.hasRole(User.Role.OWNER)) {
-                                    OutlinedButton(
-                                        onClick = { switchRole(User.Role.OWNER) },
-                                        modifier = Modifier.weight(1f),
-                                    ) {
-                                        Text("Owner")
-                                    }
-                                    OutlinedButton(
-                                        onClick = { switchRole(User.Role.ENTRANT) },
-                                        modifier = Modifier.weight(1f),
-                                    ) {
-                                        Text("Entrant")
+                                // Bookers have one role, so they have nothing to switch to.
+                                val roles = listOf(User.Role.OWNER, User.Role.ENTRANT, User.Role.ADMIN)
+                                    .filter { current.hasRole(it) }
+                                if (roles.size > 1) {
+                                    roles.forEach { role ->
+                                        OutlinedButton(
+                                            onClick = { switchRole(role) },
+                                            contentPadding = PaddingValues(horizontal = 4.dp),
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            Text(role.name.lowercase().replaceFirstChar { it.uppercase() })
+                                        }
                                     }
                                 }
                                 TextButton(onClick = { showProfile = !showProfile }) {
@@ -106,6 +107,10 @@ class MainActivity : ComponentActivity() {
                                     ownerId = current.id,
                                     campsites = campsites,
                                     modifier = Modifier.weight(1f),
+                                )
+                                activeRole == User.Role.ADMIN -> Text(
+                                    "Admin tools aren't available yet.",
+                                    modifier = Modifier.weight(1f).padding(16.dp),
                                 )
                                 else -> SearchScreen(modifier = Modifier.weight(1f))
                             }

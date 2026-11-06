@@ -162,18 +162,24 @@ class User (
                 Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
 
             /**
-             * Creates the profile for a new account. Hosts can also book, so an owner
-             * keeps ENTRANT and starts out acting as OWNER. Notifications start on.
+             * Creates the profile for a new account, acting as [role]. Hosts can also
+             * book, so an owner keeps ENTRANT, and an admin can also be an owner and
+             * entrant (US 03.11.01). Notifications start off until the user turns them
+             * on (US 01.10.01).
              * @param id The account's Firebase Auth uid.
              * @param username The name the user logs in with.
-             * @param hosting Whether the user is joining to host campsites.
+             * @param role The role the user is joining as.
              */
-            fun newAccount(id: String, username: String, hosting: Boolean): User = User(
+            fun newAccount(id: String, username: String, role: Role): User = User(
                 id = id,
                 username = username,
-                notificationsEnabled = true,
-                roles = if (hosting) mutableListOf(Role.ENTRANT, Role.OWNER) else mutableListOf(Role.ENTRANT),
-                activeRole = if (hosting) Role.OWNER else Role.ENTRANT
+                notificationsEnabled = false,
+                roles = when (role) {
+                    Role.ENTRANT -> mutableListOf(Role.ENTRANT)
+                    Role.OWNER -> mutableListOf(Role.ENTRANT, Role.OWNER)
+                    Role.ADMIN -> mutableListOf(Role.ENTRANT, Role.OWNER, Role.ADMIN)
+                },
+                activeRole = role
             )
         }
     }

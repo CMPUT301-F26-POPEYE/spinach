@@ -17,8 +17,9 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException
  * password. Passwords never go in Firestore. The profile itself is in [UserRepository].
  *
  * Firebase keeps a session on the device between launches. That session is the real
- * proof of identity: device login only decides whether a saved session may be reused,
- * because a device ID on its own is not a secret. See [loggedInWithPassword].
+ * proof of identity: a registered device may reuse it, because a device ID on its own
+ * is not a secret. See [loggedInWithPassword]. After logging out, [DeviceAccountStore]
+ * supplies the password so a registered device can log in again.
  */
 class AccountRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()) {
 
@@ -47,7 +48,7 @@ class AccountRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstanc
         auth.signInWithEmailAndPassword(AccountRules.authEmail(username), password)
             .addOnSuccessListener { passwordEntered = true }
 
-    /** Ends the session. The next launch needs the password, even on a trusted device. */
+    /** Ends the session. The next login needs the password or a passkey login. */
     fun logOut() {
         auth.signOut()
         passwordEntered = false

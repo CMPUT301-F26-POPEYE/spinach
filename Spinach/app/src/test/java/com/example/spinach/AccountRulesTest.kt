@@ -59,7 +59,7 @@ class AccountRulesTest {
 
     @Test
     fun bookerIsOnlyAnEntrant() {
-        val user = User.newAccount("id", "alex", hosting = false)
+        val user = User.newAccount("id", "alex", User.Role.ENTRANT)
 
         assertEquals(listOf(User.Role.ENTRANT), user.roles)
         assertEquals(User.Role.ENTRANT, user.activeRole)
@@ -67,7 +67,7 @@ class AccountRulesTest {
 
     @Test
     fun hostIsAnOwnerAndAnEntrant() {
-        val user = User.newAccount("id", "alex", hosting = true)
+        val user = User.newAccount("id", "alex", User.Role.OWNER)
 
         assertTrue(user.hasRole(User.Role.ENTRANT))
         assertTrue(user.hasRole(User.Role.OWNER))
@@ -75,8 +75,9 @@ class AccountRulesTest {
     }
 
     @Test
-    fun newAccountsReceiveNotifications() {
-        assertTrue(User.newAccount("id", "alex", hosting = false).notificationsEnabled)
+    fun newAccountsStartWithNotificationsOff() {
+        assertFalse(User.newAccount("id", "alex", User.Role.ENTRANT).notificationsEnabled)
+        assertFalse(User.newAccount("id", "alex", User.Role.OWNER).notificationsEnabled)
     }
 
     @Test
@@ -99,5 +100,116 @@ class AccountRulesTest {
 
         assertFalse(user.trustsDevice("device"))
         assertFalse(user.trustsDevice(""))
+    }
+
+    @Test
+    fun missingPasswordIsRejected() {
+        assertEquals(
+            "Passwords need at least 6 characters",
+            AccountRules.credentialsError("alex", "", ""),
+        )
+    }
+
+    @Test
+    fun malformedEmailsAreRejected() {
+        val malformed = listOf(
+            "alex", "alex@", "@example.com", "alex@example", "alex@example.c",
+            "alex example@test.com", "alex@exa mple.com", "alex@@example.com",
+        )
+        for (email in malformed) {
+            assertFalse(email, User.isValidEmail(email))
+            assertEquals("Enter a valid email", AccountRules.contactError("Alex", email))
+        }
+    }
+
+    @Test
+    fun wellFormedEmailsAreAccepted() {
+        for (email in listOf("alex@example.com", "a.b+c_d@sub.example.ca", " alex@example.com ")) {
+            assertTrue(email, User.isValidEmail(email))
+        }
+    }
+
+    @Test
+    fun adminPassword_onlyTheExactPasswordIsAccepted() {
+        assertNull(AccountRules.adminPasswordError("adminpass"))
+        for (password in listOf("", "wrong", "ADMINPASS", " adminpass")) {
+            assertEquals("Incorrect admin password", AccountRules.adminPasswordError(password))
+        }
+    }
+
+    @Test
+    fun adminCanAlsoBeAnOwnerAndAnEntrant() {
+        val user = User.newAccount("id", "alex", User.Role.ADMIN)
+
+        assertTrue(user.hasRole(User.Role.ADMIN))
+        assertTrue(user.hasRole(User.Role.OWNER))
+        assertTrue(user.hasRole(User.Role.ENTRANT))
+        assertEquals(User.Role.ADMIN, user.activeRole)
+    }
+
+    @Test
+    fun rolesTheUserHoldsCanBeSwitchedTo() {
+        val user = User.newAccount("id", "alex", User.Role.ADMIN)
+
+        for (role in listOf(User.Role.OWNER, User.Role.ENTRANT, User.Role.ADMIN)) {
+            assertTrue(user.switchRole(role))
+            assertEquals(role, user.activeRole)
+        }
+    }
+
+    @Test
+    fun rolesTheUserDoesNotHoldCannotBeSwitchedTo() {
+        val user = User.newAccount("id", "alex", User.Role.ENTRANT)
+
+        assertFalse(user.switchRole(User.Role.OWNER))
+        assertFalse(user.switchRole(User.Role.ADMIN))
+        assertEquals(User.Role.ENTRANT, user.activeRole)
+    }
+
+    @Test
+    fun updateProfile_changesTheDetails() {
+        val user = User(name = "Alex", email = "old@example.com", phoneNumber = "111")
+
+        assertTrue(user.updateProfile(" Sam ", "new@example.com", ""))
+
+        assertEquals("Sam", user.name)
+        assertEquals("new@example.com", user.email)
+        assertNull(user.phoneNumber)
+    }
+
+    @Test
+    fun updateProfile_changesNothingWhenInvalid() {
+        val user = User(name = "Alex", email = "old@example.com")
+
+        assertFalse(user.updateProfile("Sam", "not-an-email", "111"))
+        assertFalse(user.updateProfile(" ", "new@example.com", "111"))
+
+        assertEquals("Alex", user.name)
+        assertEquals("old@example.com", user.email)
+        assertNull(user.phoneNumber)
+    }
+
+    @Test
+    fun onlyTheRegisteredDeviceIsTrusted() {
+        val user = User()
+        user.trustDevice("device-a")
+
+        assertTrue(user.trustsDevice("device-a"))
+        assertFalse(user.trustsDevice("device-b"))
+    }
+
+    @Test
+    fun savedSession_resumesOnlyOnARegisteredDevice() {
+        val user = User()
+        user.trustDevice("device-a")
+
+        assertTrue(AccountRules.canResumeSession(user, "device-a", loggedInWithPassword = false))
+        assertFalse(AccountRules.canResumeSession(user, "device-b", loggedInWithPassword = false))
+        assertFalse(AccountRules.canResumeSession(user, "", loggedInWithPassword = false))
+    }
+
+    @Test
+    fun savedSession_resumesOnAnyDeviceAfterThePasswordWasEntered() {
+        assertTrue(AccountRules.canResumeSession(User(), "device-b", loggedInWithPassword = true))
     }
 }

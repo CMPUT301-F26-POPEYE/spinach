@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -36,9 +37,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.spinach.AccountRepository
 import com.example.spinach.AccountRules
+import com.example.spinach.DeviceAccount
+import com.example.spinach.DeviceAccountStore
 import com.example.spinach.User
 import com.example.spinach.UserRepository
 import com.example.spinach.ui.theme.SpinachTheme
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 
 // This code was produced partly by Claude Opus 5.5, 6/11/2026 over the prompt "Here is how I want the login process to go: username/password accounts with an optional device login."
 
@@ -48,19 +52,24 @@ private sealed interface LoginStep {
     data object LogIn : LoginStep
     data object CreateAccount : LoginStep
     data object Details : LoginStep
+    data class OfferNotifications(val user: User) : LoginStep
     data class OfferDeviceLogin(val user: User) : LoginStep
 }
 
 // A trusted device with a saved session goes straight to onLoggedIn. Anyone else logs in
-// with a username and password, or creates an account: username and password first, then
-// their details, then the offer to use this device to log in from now on.
+// with a passkey on a registered device, with a username and password, or creates an
+// account: username and password first, then their details, then a pop-up asking to turn
+// on notifications, then the offer to use this device to log in from now on.
 @Composable
 fun UserLoginScreen(onLoggedIn: (User) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val deviceId = remember { User.readDeviceId(context) }
+    val deviceAccounts = remember { DeviceAccountStore(context) }
     var step by remember { mutableStateOf<LoginStep>(LoginStep.Checking) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
+    var pendingPassword by remember { mutableStateOf<String?>(null) }
+    var accountChoices by remember { mutableStateOf<List<DeviceAccount>>(emptyList()) }
 
     fun show(next: LoginStep) {
         step = next
@@ -87,7 +96,14 @@ fun UserLoginScreen(onLoggedIn: (User) -> Unit, modifier: Modifier = Modifier) {
             .addOnSuccessListener { user ->
                 when {
                     user == null -> show(LoginStep.Details)
-                    user.trustsDevice(deviceId) || accounts.loggedInWithPassword -> onLoggedIn(user)
+                    AccountRules.canResumeSession(user, deviceId, accounts.loggedInWithPassword) -> {
+                        // Registers the device again after a reinstall.
+                        val password = pendingPassword
+                        if (password != null && user.trustsDevice(deviceId)) {
+                            deviceAccounts.save(user.username, user.name, password)
+                        }
+                        onLoggedIn(user)
+                    }
                     else -> {
                         accounts.logOut()
                         show(LoginStep.LogIn)
@@ -95,6 +111,52 @@ fun UserLoginScreen(onLoggedIn: (User) -> Unit, modifier: Modifier = Modifier) {
                 }
             }
             .addOnFailureListener { show(LoginStep.LoadFailed(AccountRepository.errorMessage(it))) }
+    }
+
+    fun logIn(username: String, password: String, onRejected: (Exception) -> Unit = {}) {
+        busy = true
+        status = ""
+        pendingPassword = password
+        AccountRepository().logIn(username, password)
+            .addOnSuccessListener { resumeSession() }
+            .addOnFailureListener {
+                pendingPassword = null
+                onRejected(it)
+                fail(it)
+            }
+    }
+
+    fun logInWithPasskey(account: DeviceAccount) {
+        accountChoices = emptyList()
+        val password = deviceAccounts.password(account.username)
+        if (password == null) {
+            deviceAccounts.remove(account.username)
+            status = "Log in with your password to use this device again"
+            return
+        }
+        logIn(account.username, password) {
+            // The saved password no longer works, so don't keep offering it.
+            if (it is FirebaseAuthInvalidCredentialsException) deviceAccounts.remove(account.username)
+        }
+    }
+
+    fun onPasskeyClicked() {
+        val saved = deviceAccounts.accounts()
+        when (saved.size) {
+            0 -> status = "No accounts are registered on this device"
+            1 -> logInWithPasskey(saved.single())
+            else -> accountChoices = saved
+        }
+    }
+
+    // Without the password the device can't be registered here, so the Profile screen
+    // offers it instead.
+    fun offerDeviceLogin(user: User) {
+        if (deviceId.isBlank() || pendingPassword == null) {
+            onLoggedIn(user)
+        } else {
+            show(LoginStep.OfferDeviceLogin(user))
+        }
     }
 
     LaunchedEffect(Unit) { resumeSession() }
@@ -113,13 +175,8 @@ fun UserLoginScreen(onLoggedIn: (User) -> Unit, modifier: Modifier = Modifier) {
         LoginStep.LogIn -> LogInForm(
             busy = busy,
             status = status,
-            onLogIn = { username, password ->
-                busy = true
-                status = ""
-                AccountRepository().logIn(username, password)
-                    .addOnSuccessListener { resumeSession() }
-                    .addOnFailureListener { fail(it) }
-            },
+            onLogIn = { username, password -> logIn(username, password) },
+            onPasskey = { onPasskeyClicked() },
             onCreateAccount = { show(LoginStep.CreateAccount) },
             modifier = modifier,
         )
@@ -134,7 +191,10 @@ fun UserLoginScreen(onLoggedIn: (User) -> Unit, modifier: Modifier = Modifier) {
                     busy = true
                     status = ""
                     AccountRepository().createAccount(username, password)
-                        .addOnSuccessListener { show(LoginStep.Details) }
+                        .addOnSuccessListener {
+                            pendingPassword = password
+                            show(LoginStep.Details)
+                        }
                         .addOnFailureListener { fail(it) }
                 }
             },
@@ -144,17 +204,16 @@ fun UserLoginScreen(onLoggedIn: (User) -> Unit, modifier: Modifier = Modifier) {
         LoginStep.Details -> AccountDetailsForm(
             busy = busy,
             status = status,
-            onSubmit = { name, email, phoneNumber, hosting ->
+            onSubmit = { name, email, phoneNumber, role, adminPassword ->
                 val accounts = AccountRepository()
-                val user = User.newAccount(accounts.currentUserId.orEmpty(), accounts.currentUsername, hosting)
+                val user = User.newAccount(accounts.currentUserId.orEmpty(), accounts.currentUsername, role)
                 val problem = AccountRules.contactError(name, email)
+                    ?: if (role == User.Role.ADMIN) AccountRules.adminPasswordError(adminPassword) else null
                 if (problem == null && user.updateProfile(name, email, phoneNumber)) {
                     busy = true
                     status = ""
                     UserRepository().save(user)
-                        .addOnSuccessListener {
-                            if (deviceId.isBlank()) onLoggedIn(user) else show(LoginStep.OfferDeviceLogin(user))
-                        }
+                        .addOnSuccessListener { show(LoginStep.OfferNotifications(user)) }
                         .addOnFailureListener { fail(it) }
                 } else {
                     status = problem.orEmpty()
@@ -162,24 +221,118 @@ fun UserLoginScreen(onLoggedIn: (User) -> Unit, modifier: Modifier = Modifier) {
             },
             modifier = modifier,
         )
+        is LoginStep.OfferNotifications -> NotificationsPrompt(
+            busy = busy,
+            status = status,
+            onTurnOn = {
+                busy = true
+                status = ""
+                current.user.notificationsEnabled = true
+                UserRepository().save(current.user)
+                    .addOnSuccessListener { offerDeviceLogin(current.user) }
+                    .addOnFailureListener {
+                        current.user.notificationsEnabled = false
+                        fail(it)
+                    }
+            },
+            onNotNow = { offerDeviceLogin(current.user) },
+        )
         is LoginStep.OfferDeviceLogin -> DeviceLoginOffer(
             busy = busy,
             status = status,
             onAccept = {
-                busy = true
-                status = ""
-                current.user.trustDevice(deviceId)
-                UserRepository().save(current.user)
-                    .addOnSuccessListener { onLoggedIn(current.user) }
-                    .addOnFailureListener {
-                        current.user.untrustDevice(deviceId)
-                        fail(it)
-                    }
+                val user = current.user
+                if (deviceAccounts.save(user.username, user.name, pendingPassword.orEmpty())) {
+                    busy = true
+                    status = ""
+                    user.trustDevice(deviceId)
+                    UserRepository().save(user)
+                        .addOnSuccessListener { onLoggedIn(user) }
+                        .addOnFailureListener {
+                            user.untrustDevice(deviceId)
+                            deviceAccounts.remove(user.username)
+                            fail(it)
+                        }
+                } else {
+                    status = "Could not register this device"
+                }
             },
             onDecline = { onLoggedIn(current.user) },
             modifier = modifier,
         )
     }
+
+    if (accountChoices.isNotEmpty()) {
+        DeviceAccountPicker(
+            accounts = accountChoices,
+            onPick = { logInWithPasskey(it) },
+            onDismiss = { accountChoices = emptyList() },
+        )
+    }
+}
+
+// US 01.10.01: notifications stay off unless the user chooses to turn them on here or on
+// the Profile screen. The user has to choose, so tapping outside doesn't close the pop-up.
+@Composable
+private fun NotificationsPrompt(
+    busy: Boolean,
+    status: String,
+    onTurnOn: () -> Unit,
+    onNotNow: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Turn on notifications?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Get updates about your lotteries and reservations. You can change this later in your profile.")
+                if (status.isNotEmpty()) Text(status)
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = !busy, onClick = onTurnOn) {
+                Text(if (busy) "Saving..." else "Turn on")
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !busy, onClick = onNotNow) {
+                Text("Not now")
+            }
+        },
+    )
+}
+
+// Shown when several accounts are registered on this device.
+@Composable
+private fun DeviceAccountPicker(
+    accounts: List<DeviceAccount>,
+    onPick: (DeviceAccount) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Choose an account") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                accounts.forEach { account ->
+                    OutlinedButton(
+                        onClick = { onPick(account) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("${account.name} (${account.username})")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable
@@ -230,6 +383,7 @@ private fun LogInForm(
     busy: Boolean,
     status: String,
     onLogIn: (username: String, password: String) -> Unit,
+    onPasskey: () -> Unit,
     onCreateAccount: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -246,6 +400,13 @@ private fun LogInForm(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(if (busy) "Logging in..." else "Log in")
+        }
+        OutlinedButton(
+            enabled = !busy,
+            onClick = onPasskey,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Login with passkey")
         }
         OutlinedButton(
             enabled = !busy,
@@ -293,13 +454,20 @@ private fun CreateAccountForm(
 private fun AccountDetailsForm(
     busy: Boolean,
     status: String,
-    onSubmit: (name: String, email: String, phoneNumber: String, hosting: Boolean) -> Unit,
+    onSubmit: (
+        name: String,
+        email: String,
+        phoneNumber: String,
+        role: User.Role,
+        adminPassword: String,
+    ) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
-    var hosting by remember { mutableStateOf(false) }
+    var role by remember { mutableStateOf(User.Role.ENTRANT) }
+    var adminPassword by remember { mutableStateOf("") }
 
     LoginColumn(modifier) {
         Text("Your details", style = MaterialTheme.typography.titleLarge)
@@ -313,11 +481,21 @@ private fun AccountDetailsForm(
             enabled = !busy,
         )
         Text("I'm joining to", style = MaterialTheme.typography.titleMedium)
-        JoiningOption("Book campsites", selected = !hosting, enabled = !busy) { hosting = false }
-        JoiningOption("Host campsites (you can book too)", selected = hosting, enabled = !busy) { hosting = true }
+        JoiningOption("Book campsites", selected = role == User.Role.ENTRANT, enabled = !busy) {
+            role = User.Role.ENTRANT
+        }
+        JoiningOption("Host campsites (you can book too)", selected = role == User.Role.OWNER, enabled = !busy) {
+            role = User.Role.OWNER
+        }
+        JoiningOption("Register as Admin", selected = role == User.Role.ADMIN, enabled = !busy) {
+            role = User.Role.ADMIN
+        }
+        if (role == User.Role.ADMIN) {
+            PasswordField(adminPassword, { adminPassword = it }, enabled = !busy, label = "Admin password")
+        }
         Button(
             enabled = !busy,
-            onClick = { onSubmit(name, email, phoneNumber, hosting) },
+            onClick = { onSubmit(name, email, phoneNumber, role, adminPassword) },
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(if (busy) "Saving..." else "Continue")
@@ -350,8 +528,9 @@ private fun DeviceLoginOffer(
     LoginColumn(modifier) {
         Text("Log in with this device?", style = MaterialTheme.typography.titleLarge)
         Text(
-            "This device will log you in automatically, so you won't need your username " +
-                "and password here. You can change this later in your profile."
+            "You won't need your username and password on this device. Anyone using it " +
+                "can log in as you with Login with passkey. You can change this later " +
+                "in your profile."
         )
         Button(enabled = !busy, onClick = onAccept, modifier = Modifier.fillMaxWidth()) {
             Text(if (busy) "Saving..." else "Use this device")
@@ -367,7 +546,30 @@ private fun DeviceLoginOffer(
 @Composable
 private fun LogInFormPreview() {
     SpinachTheme {
-        LogInForm(busy = false, status = "", onLogIn = { _, _ -> }, onCreateAccount = {})
+        LogInForm(busy = false, status = "", onLogIn = { _, _ -> }, onPasskey = {}, onCreateAccount = {})
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun NotificationsPromptPreview() {
+    SpinachTheme {
+        NotificationsPrompt(busy = false, status = "", onTurnOn = {}, onNotNow = {})
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun DeviceAccountPickerPreview() {
+    SpinachTheme {
+        DeviceAccountPicker(
+            accounts = listOf(
+                DeviceAccount("alex_camper", "Alex Camper"),
+                DeviceAccount("sam_hikes", "Sam Hikes"),
+            ),
+            onPick = {},
+            onDismiss = {},
+        )
     }
 }
 
@@ -375,7 +577,7 @@ private fun LogInFormPreview() {
 @Composable
 private fun AccountDetailsFormPreview() {
     SpinachTheme {
-        AccountDetailsForm(busy = false, status = "", onSubmit = { _, _, _, _ -> })
+        AccountDetailsForm(busy = false, status = "", onSubmit = { _, _, _, _, _ -> })
     }
 }
 
