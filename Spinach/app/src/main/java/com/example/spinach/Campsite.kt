@@ -56,4 +56,14 @@ class Campsite (
         ratings.add(rating)
         reviews.add(comment)
     }
+    @Exclude
+    fun validationError(): String? {
+        if(name.isBlank()||location.isBlank()||description.isBlank()||tags.isEmpty()||(mapCoordinates.latitude == 0.0 && mapCoordinates.longitude == 0.0)){
+            return "All fields are required!"
+        }
+        if (maxOccupancy <= 0)
+            return "Maximum occupancy must be greater than 0"
+
+        return null
+    }
 }
