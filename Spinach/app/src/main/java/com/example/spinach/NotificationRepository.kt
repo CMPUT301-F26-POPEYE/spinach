@@ -2,6 +2,8 @@ package com.example.spinach
 
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 
 class NotificationRepository(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -39,6 +41,33 @@ class NotificationRepository(
             )
         }
     }
+
+    // US 02.10.02: everything this owner has sent. Call remove() when the screen goes away.
+    fun listenForSender(
+        senderId: String,
+        onResult: (List<Notification>) -> Unit,
+        onError: (Exception) -> Unit,
+    ): ListenerRegistration =
+        listen(db.collection("notifications").whereEqualTo("senderId", senderId), onResult, onError)
+
+    // US 03.08.01: the admin log of every notification
+    fun listenAll(
+        onResult: (List<Notification>) -> Unit,
+        onError: (Exception) -> Unit,
+    ): ListenerRegistration = listen(db.collection("notifications"), onResult, onError)
+
+    private fun listen(
+        query: Query,
+        onResult: (List<Notification>) -> Unit,
+        onError: (Exception) -> Unit,
+    ): ListenerRegistration =
+        query.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                onError(error)
+                return@addSnapshotListener
+            }
+            onResult(snapshot?.toObjects(Notification::class.java).orEmpty())
+        }
 
     // US 01.10.01: a user document with notificationsEnabled == false means opted out.
     // No user document means we send.

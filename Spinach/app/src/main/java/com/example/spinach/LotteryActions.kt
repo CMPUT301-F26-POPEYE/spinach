@@ -3,6 +3,7 @@ package com.example.spinach
 import android.annotation.SuppressLint
 import android.content.Context
 import android.provider.Settings
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -10,15 +11,16 @@ import kotlinx.coroutines.tasks.await
 
 /**
  * The id that identifies this entrant in a lottery waitlist.
- * The entrant is identified by the device, with no login (US 01.09.01).
- * Change it here if the app later uses profile ids.
+ * Returns the signed-in Firebase UID, the same id the rest of the app uses, falling back
+ * to the device id if nobody is signed in yet.
  *
  * @param context The app's context.
- * @return The device's unique ID.
+ * @return The signed-in Firebase UID, or the device's unique ID.
  */
 @SuppressLint("HardwareIds")
 fun deviceEntrantId(context: Context): String =
-    Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+    FirebaseAuth.getInstance().currentUser?.uid
+        ?: Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
 
 /**
  * Loads the lottery that is accepting entrants for a campsite.
