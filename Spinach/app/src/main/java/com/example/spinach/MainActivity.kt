@@ -13,11 +13,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.spinach.ui.theme.SpinachTheme//T-for lottery
 import com.example.spinach.ui.CreateLotteryScreen//T-for lottery
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.google.firebase.auth.FirebaseAuth
 
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val auth = FirebaseAuth.getInstance()
+        var uid by mutableStateOf(auth.currentUser?.uid ?: "")
+        if (auth.currentUser == null) {
+            auth.signInAnonymously().addOnSuccessListener { uid = it.user?.uid ?: "" }
+        }
 
         enableEdgeToEdge()
         setContent {
@@ -25,7 +34,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     CreateLotteryScreen(
                         campsiteId = "test-campsite-talha",// this is hardcodedm, will need to be changed once all owner UI is complete
-                        userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        userId = uid,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
