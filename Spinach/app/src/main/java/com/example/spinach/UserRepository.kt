@@ -13,8 +13,8 @@ import com.google.firebase.firestore.WriteBatch
 * Handles saving, loading, and deleting [User] objects in Cloud Firestore.
 *
 * Keeps all database code out of the [User] model. Each user is stored as one
-* document in the [COLLECTION] collection, with the user's [User.deviceId] as
-* the document ID (so `users/{deviceId}`).
+* document in the [COLLECTION] collection, with the user's [User.id] as the
+* document ID (so `users/{id}`). Passwords are not stored here, see [AccountRepository].
 *
 * All functions return a [Task], so the caller decides how to react:
 * ```
@@ -45,29 +45,29 @@ class UserRepository(private val db: FirebaseFirestore = FirebaseFirestore.getIn
      * Saves a user, creating the document if it doesn't exist or fully replacing
      * it if it does. Use this for both first-time creation and later profile edits.
      *
-     * @param user The user to store. Its [User.deviceId] must not be blank.
+     * @param user The user to store. Its [User.id] must not be blank.
      * @return A task that completes when the write is confirmed. Fails with an
-     * [IllegalArgumentException] if the device ID is blank.
+     * [IllegalArgumentException] if the ID is blank.
      */
     fun save(user: User): Task<Void> {
-        if (user.deviceId.isBlank()) {
-            return Tasks.forException(IllegalArgumentException("User has no deviceId"))
+        if (user.id.isBlank()) {
+            return Tasks.forException(IllegalArgumentException("User has no id"))
         }
-        return users.document(user.deviceId).set(user)
+        return users.document(user.id).set(user)
     }
 
     /**
      * Loads one user.
      *
-     * @param deviceId The user's device ID.
+     * @param userId The user's ID.
      * @return A task whose result is the [User], or `null` if no user with that
-     * ID is stored. Fails with an [IllegalArgumentException] if [deviceId] is blank.
+     * ID is stored. Fails with an [IllegalArgumentException] if [userId] is blank.
      */
-    fun get(deviceId: String): Task<User?> {
-        if (deviceId.isBlank()) {
-            return Tasks.forException(IllegalArgumentException("deviceId is blank"))
+    fun get(userId: String): Task<User?> {
+        if (userId.isBlank()) {
+            return Tasks.forException(IllegalArgumentException("userId is blank"))
         }
-        return users.document(deviceId).get().continueWith { task ->
+        return users.document(userId).get().continueWith { task ->
             task.result?.toObject(User::class.java)
         }
     }
@@ -75,41 +75,15 @@ class UserRepository(private val db: FirebaseFirestore = FirebaseFirestore.getIn
     /**
      * Checks whether a user is stored, without building a [User] object.
      *
-     * @param deviceId The user's device ID.
+     * @param userId The user's ID.
      * @return A task whose result is `true` if the document exists.
      */
-    fun exists(deviceId: String): Task<Boolean> {
-        if (deviceId.isBlank()) {
-            return Tasks.forException(IllegalArgumentException("deviceId is blank"))
+    fun exists(userId: String): Task<Boolean> {
+        if (userId.isBlank()) {
+            return Tasks.forException(IllegalArgumentException("userId is blank"))
         }
-        return users.document(deviceId).get().continueWith { task ->
+        return users.document(userId).get().continueWith { task ->
             task.result?.exists() == true
-        }
-    }
-
-    /**
-     * Loads the user for this device, creating and saving a new one if none exists.
-     *
-     * This is what guarantees every device has a stored user (US 01.09.01). Call it
-     * once at app launch with the ID from [User.readDeviceId].
-     *
-     * @param deviceId The device's ID.
-     * @param name Display name for a newly created user, or `null` to set it later.
-     * Ignored if the user already exists.
-     * @return A task whose result is the existing or newly created [User].
-     */
-    fun getOrCreate(deviceId: String, name: String): Task<User> {
-        return get(deviceId).continueWithTask { task ->
-            val existing = task.result // throws if the load failed
-            if (existing != null) {
-                Tasks.forResult(existing)
-            } else {
-                val newUser = User(deviceId = deviceId, name = name)
-                save(newUser).continueWith { saveTask ->
-                    saveTask.result // throws if the save failed
-                    newUser
-                }
-            }
         }
     }
 
@@ -131,31 +105,31 @@ class UserRepository(private val db: FirebaseFirestore = FirebaseFirestore.getIn
      *
      * Also usable by an admin to remove a profile (US 03.02.01, US 03.05.01).
      *
-     * @param deviceId The device ID of the user to delete.
+     * @param userId The ID of the user to delete.
      * @return A task that completes when the delete is confirmed.
      */
-    fun delete(deviceId: String): Task<Void> {
-        if (deviceId.isBlank()) {
-            return Tasks.forException(IllegalArgumentException("deviceId is blank"))
+    fun delete(userId: String): Task<Void> {
+        if (userId.isBlank()) {
+            return Tasks.forException(IllegalArgumentException("userId is blank"))
         }
 
         // Read everything that refers to this user.
         val receivedNotifications =
-            db.collection(NOTIFICATIONS).whereEqualTo("recipientId", deviceId).get()
+            db.collection(NOTIFICATIONS).whereEqualTo("recipientId", userId).get()
         val ownReservations =
-            db.collection(RESERVATIONS).whereEqualTo("entrantId", deviceId).get()
+            db.collection(RESERVATIONS).whereEqualTo("entrantId", userId).get()
         val reservationsAtOwnCampsites =
-            db.collection(RESERVATIONS).whereEqualTo("ownerId", deviceId).get()
+            db.collection(RESERVATIONS).whereEqualTo("ownerId", userId).get()
         val onWaitlist =
-            db.collection(LOTTERIES).whereArrayContains("waitlist", deviceId).get()
+            db.collection(LOTTERIES).whereArrayContains("waitlist", userId).get()
         val asWinner =
-            db.collection(LOTTERIES).whereArrayContains("winners", deviceId).get()
+            db.collection(LOTTERIES).whereArrayContains("winners", userId).get()
         val asLoser =
-            db.collection(LOTTERIES).whereArrayContains("losers", deviceId).get()
+            db.collection(LOTTERIES).whereArrayContains("losers", userId).get()
         val ownedLotteries =
-            db.collection(LOTTERIES).whereEqualTo("ownerId", deviceId).get()
+            db.collection(LOTTERIES).whereEqualTo("ownerId", userId).get()
         val ownedCampsites =
-            db.collection(CAMPSITES).whereEqualTo("ownerId", deviceId).get()
+            db.collection(CAMPSITES).whereEqualTo("ownerId", userId).get()
 
         return Tasks.whenAll(receivedNotifications, ownReservations, reservationsAtOwnCampsites, onWaitlist, asWinner, asLoser, ownedLotteries, ownedCampsites
         ).continueWithTask<Void> { readsTask ->
@@ -190,7 +164,7 @@ class UserRepository(private val db: FirebaseFirestore = FirebaseFirestore.getIn
                 for (doc in snapshot.documents) {
                     if (doc.id !in ownedLotteryIds) {
                         updates.add {
-                            it.update(doc.reference, field, FieldValue.arrayRemove(deviceId))
+                            it.update(doc.reference, field, FieldValue.arrayRemove(userId))
                         }
                     }
                 }
@@ -210,7 +184,7 @@ class UserRepository(private val db: FirebaseFirestore = FirebaseFirestore.getIn
             commitAll(updates + deletes)
         }.continueWithTask<Void> { cleanupTask ->
             cleanupTask.result // throws if the cleanup failed, so the user document is kept
-            users.document(deviceId).delete()
+            users.document(userId).delete()
         }
     }
     /**

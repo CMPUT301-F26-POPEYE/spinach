@@ -7,7 +7,7 @@ import android.provider.Settings
 
 /**
 *User
-* Represents a person using the app. User can be identified by their device ID.
+* Represents a person using the app. User is identified by their account, and can choose to trust devices for login.
 * Stores user contact info, notification preference, roles they can be. A single user can be an owner/entrant/admin and can switch between the roles.
  *
  * Collaborators: Notification, Reservation, Lottery, Campsite. A user does not hold
@@ -16,23 +16,27 @@ import android.provider.Settings
 *
 * To cover: US 01.09.01, US 01.07.03, US 01.10.01, US 03.11.01, user info and object
 * @constructor Creates a new User object.
-* @property deviceId Unique, device-based identifier. Acts as the user's ID (US 01.09.01).
+* @property id The account's Firebase Auth uid. Acts as the user's ID.
+* @property username The name the user logs in with. Stored in lowercase.
 * @property name User's name.
-* @property email User's email. (optional)
+* @property email User's email.
 * @property phoneNumber User's phone number (optional)
 * @property notificationsEnabled Whether the user wants to receive notifications (US 01.10.01).
 * @property roles All roles this user is allowed to act as. Everyone is an ENTRANT by default.
 * @property activeRole The role this user is currently acting as.
+* @property trustedDeviceIds Devices that can skip the password (US 01.09.01).
 *
  */
 class User (
-    var deviceId: String = "",
+    var id: String = "",
+    var username: String = "",
     var name: String = "",
     var email: String? = null,
     var phoneNumber: String? = null,
     var notificationsEnabled: Boolean = false,
     var roles: MutableList<Role> = mutableListOf(Role.ENTRANT),
-    var activeRole: Role = Role.ENTRANT
+    var activeRole: Role = Role.ENTRANT,
+    var trustedDeviceIds: MutableList<String> = mutableListOf()
     ) {
 
         /** Roles a single user can act as (US 03.11.01). */
@@ -110,6 +114,29 @@ class User (
             return true
         }
 
+        // --------------------------------------------------------------- devices
+
+        /**
+         * Checks if this device may skip the password (US 01.09.01).
+         * @param deviceId The device's ID, from [readDeviceId].
+         */
+        fun trustsDevice(deviceId: String): Boolean =
+            deviceId.isNotBlank() && deviceId in trustedDeviceIds
+
+        /** Lets this device skip the password.
+         * @param deviceId The device's ID, from [readDeviceId].
+         */
+        fun trustDevice(deviceId: String) {
+            if (deviceId.isNotBlank() && deviceId !in trustedDeviceIds) trustedDeviceIds.add(deviceId)
+        }
+
+        /** Makes this device use the password again.
+         * @param deviceId The device's ID, from [readDeviceId].
+         */
+        fun untrustDevice(deviceId: String) {
+            trustedDeviceIds.remove(deviceId)
+        }
+
         companion object {
             private val EMAIL_REGEX = Regex("^[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}$")
 
@@ -126,19 +153,28 @@ class User (
                 email != null && EMAIL_REGEX.matches(email.trim())
 
             /**
-             * Reads this device's unique ID so the user can be identified without
-             * a username/password (US 01.09.01).
+             * Reads this device's unique ID so a trusted device can skip the
+             * username/password (US 01.09.01).
              * @param context The app's context.
              * @return The device's unique ID.
              */
             fun readDeviceId(context: Context): String =
                 Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
 
-            /** Creates a new User tied to this device.
-             * @param context The app's context.
-             * */
-            fun fromDevice(context: Context, name: String): User =
-                User(deviceId = readDeviceId(context), name = name)
+            /**
+             * Creates the profile for a new account. Hosts can also book, so an owner
+             * keeps ENTRANT and starts out acting as OWNER. Notifications start on.
+             * @param id The account's Firebase Auth uid.
+             * @param username The name the user logs in with.
+             * @param hosting Whether the user is joining to host campsites.
+             */
+            fun newAccount(id: String, username: String, hosting: Boolean): User = User(
+                id = id,
+                username = username,
+                notificationsEnabled = true,
+                roles = if (hosting) mutableListOf(Role.ENTRANT, Role.OWNER) else mutableListOf(Role.ENTRANT),
+                activeRole = if (hosting) Role.OWNER else Role.ENTRANT
+            )
         }
     }
 
