@@ -7,10 +7,9 @@ import com.google.firebase.firestore.ListenerRegistration
 class LotteryRepository {
 
     private val db = FirebaseFirestore.getInstance()
-    fun create(lottery: Lottery, userId: String, onDone: (Result<String>) -> Unit) {// US 0.2.04.01, crating lottery for campsite
-
-        //This if function was created with the assistance of Open AI, Nov 5, 2026 "Create lottery test file
-        if (lottery.campsiteId.isBlank() || userId.isBlank()) {
+    fun create(lottery: Lottery, userId: String, onDone: (Result<String>) -> Unit) {// US 02.04.01 and 02.04.02
+        val campsiteIds = lottery.campsites().filter { it.isNotBlank() }.distinct()
+        if (campsiteIds.isEmpty() || userId.isBlank()) {
             onDone(
                 Result.failure(
                     IllegalArgumentException(
@@ -21,38 +20,51 @@ class LotteryRepository {
             return
         }
 
-        val error = lottery.validationError()//checking for all lot details
-
+        val error = lottery.validationError()
         if (error != null) {
             onDone(Result.failure(Exception(error)))
             return
         }
 
-        db.collection("campsites").document(lottery.campsiteId).get()//checking if user owns campsite
-            .addOnSuccessListener { campsite ->
+        checkOwnsAll(campsiteIds, userId) { problem ->
+            if (problem != null) {
+                onDone(Result.failure(problem))
+                return@checkOwnsAll
+            }
 
-                val ownerId = campsite.getString("ownerId")
+            lottery.ownerId = userId
+            lottery.campsiteId = campsiteIds.first()
+            lottery.campsiteIds = campsiteIds.toMutableList()
 
-                if (ownerId != userId) {//only owner can create lottery
-                    onDone(Result.failure(Exception("Only the campsite owner can create a lottery")))
-                    return@addOnSuccessListener
+            val lotteryRef = db.collection("lotteries").document()
+            lotteryRef.set(lottery)
+                .addOnSuccessListener { onDone(Result.success(lotteryRef.id)) }
+                .addOnFailureListener { onDone(Result.failure(it)) }
+        }
+    }
+
+    // only the owner of every campsite can put them in a lottery
+    private fun checkOwnsAll(campsiteIds: List<String>, userId: String, onDone: (Exception?) -> Unit) {
+        var remaining = campsiteIds.size
+        var failed = false
+        for (id in campsiteIds) {
+            db.collection("campsites").document(id).get()
+                .addOnSuccessListener { campsite ->
+                    if (failed) return@addOnSuccessListener
+                    if (campsite.getString("ownerId") != userId) {
+                        failed = true
+                        onDone(Exception("Only the campsite owner can create a lottery"))
+                        return@addOnSuccessListener
+                    }
+                    remaining -= 1
+                    if (remaining == 0) onDone(null)
                 }
-
-                lottery.ownerId = userId
-
-                val lotteryRef = db.collection("lotteries").document()//save lot to firestore
-
-                lotteryRef.set(lottery)//saving and retunring the id if works
-                    .addOnSuccessListener {
-                        onDone(Result.success(lotteryRef.id))
-                    }
-                    .addOnFailureListener { error ->
-                        onDone(Result.failure(error))
-                    }
-            }
-            .addOnFailureListener { error ->
-                onDone(Result.failure(error))
-            }
+                .addOnFailureListener { error ->
+                    if (failed) return@addOnFailureListener
+                    failed = true
+                    onDone(error)
+                }
+        }
     }
 
     fun listenForCampsite(//getting lot for campsite, also updating when they change
@@ -61,8 +73,8 @@ class LotteryRepository {
     ): ListenerRegistration {
 
         return db.collection("lotteries")
-            .whereEqualTo("campsiteId", campsiteId)
-            .addSnapshotListener { snapshot, error ->
+                .whereArrayContains("campsiteIds", campsiteId)
+                .addSnapshotListener { snapshot, error ->
 
                 if (error != null || snapshot == null) {//return empty list if cant load lot
                     onResult(emptyList())
