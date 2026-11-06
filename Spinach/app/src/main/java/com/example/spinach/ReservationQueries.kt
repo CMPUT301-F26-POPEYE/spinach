@@ -53,22 +53,6 @@ object ReservationQueries {
             .distinct()
             .sorted()
 
-    // US 02.07.03: CANCELLED by the entrant, newest first.
-    fun cancelled(reservations: List<Reservation>): List<Reservation> =
-        reservations
-            .filter { it.status == ReservationStatus.CANCELLED }
-            .sortedByDescending { it.createdAt }
-
-    // US 02.08.01: REJECTED by the owner, newest first.
-    fun rejected(reservations: List<Reservation>): List<Reservation> =
-        reservations
-            .filter { it.status == ReservationStatus.REJECTED }
-            .sortedByDescending { it.createdAt }
-
-    // US 02.08.01: only an ACTIVE reservation that has not ended can be rejected.
-    fun canReject(reservation: Reservation, today: Long): Boolean =
-        reservation.status == ReservationStatus.ACTIVE && !isPast(reservation, today)
-
     // For example "Fri 6 Nov 2026". Read in UTC because dates are stored at UTC midnight.
     fun formatDay(day: Long, locale: Locale = Locale.getDefault()): String {
         val format = SimpleDateFormat("EEE d MMM yyyy", locale)
