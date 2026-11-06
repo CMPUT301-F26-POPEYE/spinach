@@ -2,26 +2,32 @@ package com.example.spinach
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.example.spinach.ui.OwnerApp
-import com.example.spinach.ui.theme.SpinachTheme
-import com.google.firebase.auth.FirebaseAuth
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.spinach.ui.OwnerApp
+import com.example.spinach.ui.UserLoginScreen
+import com.example.spinach.ui.UserProfileOptions
+import com.example.spinach.ui.theme.SpinachTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,68 +35,85 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             SpinachTheme {
-                val auth = FirebaseAuth.getInstance()
-                var ownerId by remember { mutableStateOf(auth.currentUser?.uid ?: "") }
+                val context = LocalContext.current
+                val deviceId = remember { User.readDeviceId(context) }
+                var user by remember { mutableStateOf<User?>(null) }
+                var activeRole by remember { mutableStateOf(User.Role.ENTRANT) }
+                var showProfile by remember { mutableStateOf(false) }
+                val ownerId = user?.id.orEmpty()
 
-                // Temporary sign-in until the device identity story (US 01.09.01) is in
-                LaunchedEffect(Unit) {
-                    if (auth.currentUser == null) {
-                        auth.signInAnonymously().addOnCompleteListener {
-                            ownerId = auth.currentUser?.uid ?: ""
-                        }
-                    }
-                }
-
-                // Temporary until Ali's CampsiteRepository.ownerCampsites is on main.
-                // Then replace this with a state list filled by ownerCampsites { campsites = it }.
                 var campsites by remember { mutableStateOf(emptyList<Campsite>()) }
                 LaunchedEffect(ownerId) {
+                    campsites = emptyList()
                     if (ownerId.isNotBlank()) CampsiteRepository().ownerCampsites { campsites = it }
                 }
 
-                var selectedRole by remember {
-                    mutableStateOf("Owner")
-                }
-
-
-                //Current owner/entrant navigation is just a role swithc
-                //both screens functional but final integration needed
-                //for consistent user identiity, owner authorization , access to all entrant features. NEEDS WORK
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            OutlinedButton(
-                                onClick = { selectedRole = "Owner" },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Owner")
-                            }
-
-                            OutlinedButton(
-                                onClick = { selectedRole = "Entrant" },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Entrant")
+                    val modifier = Modifier.padding(innerPadding)
+                    val current = user
+                    if (current == null) {
+                        UserLoginScreen(
+                            onLoggedIn = {
+                                user = it
+                                activeRole = it.activeRole
+                                showProfile = false
+                            },
+                            modifier = modifier,
+                        )
+                    } else {
+                        // Saved so the role is still selected on the next launch.
+                        fun switchRole(role: User.Role) {
+                            showProfile = false
+                            if (role != current.activeRole && current.switchRole(role)) {
+                                activeRole = role
+                                UserRepository().save(current)
                             }
                         }
 
-                        if (selectedRole == "Owner") {
-                            OwnerApp(
-                                ownerId = ownerId,
-                                campsites = campsites,
-                                modifier = Modifier.weight(1f)
-                            )
-                        } else {
-                            SearchScreen(
-                                modifier = Modifier.weight(1f)
-                            )
+                        BackHandler(enabled = showProfile) { showProfile = false }
+                        Column(modifier = modifier.fillMaxSize()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                // Bookers have one role, so they have nothing to switch to.
+                                val roles = listOf(User.Role.OWNER, User.Role.ENTRANT, User.Role.ADMIN)
+                                    .filter { current.hasRole(it) }
+                                if (roles.size > 1) {
+                                    roles.forEach { role ->
+                                        OutlinedButton(
+                                            onClick = { switchRole(role) },
+                                            contentPadding = PaddingValues(horizontal = 4.dp),
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            Text(role.name.lowercase().replaceFirstChar { it.uppercase() })
+                                        }
+                                    }
+                                }
+                                TextButton(onClick = { showProfile = !showProfile }) {
+                                    Text(if (showProfile) "Back to app" else "Profile")
+                                }
+                            }
+                            when {
+                                showProfile -> UserProfileOptions(
+                                    user = current,
+                                    deviceId = deviceId,
+                                    onRoleChanged = { activeRole = it },
+                                    onLoggedOut = { user = null },
+                                    onProfileDeleted = { user = null },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                activeRole == User.Role.OWNER -> OwnerApp(
+                                    ownerId = current.id,
+                                    campsites = campsites,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                activeRole == User.Role.ADMIN -> Text(
+                                    "Admin tools aren't available yet.",
+                                    modifier = Modifier.weight(1f).padding(16.dp),
+                                )
+                                else -> SearchScreen(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
