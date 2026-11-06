@@ -4,9 +4,24 @@ package com.example.spinach
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 
+/**
+ * Manages campsite lotteries stored in Firebase Firestore.
+ * Uses the Repository pattern to separate database operations
+ * from the Lottery model and user interface.
+ *
+ * Outstanding issue: Lottery draws currently depend on the
+ * application running rather than a scheduled server trigger.
+ */
 class LotteryRepository {
 
     private val db = FirebaseFirestore.getInstance()
+
+    /**
+     * Creates a lottery after validating its information and
+     * verifying ownership of all selected campsites.
+     * Saves the lottery to Firestore and reports success or failure.
+     */
+    //This function was created by the help of Claude, Anthropic "Implementing Lottery Creation". November 4, 2026
     fun create(lottery: Lottery, userId: String, onDone: (Result<String>) -> Unit) {// US 02.04.01 and 02.04.02
         val campsiteIds = lottery.campsites().filter { it.isNotBlank() }.distinct()
         if (campsiteIds.isEmpty() || userId.isBlank()) {
@@ -67,6 +82,10 @@ class LotteryRepository {
         }
     }
 
+    /**
+     * Listens for lotteries associated with a campsite.
+     * Updates the lottery list whenever Firestore data changes.
+     */
     fun listenForCampsite(//getting lot for campsite, also updating when they change
         campsiteId: String,
         onResult: (List<Lottery>) -> Unit
@@ -85,6 +104,11 @@ class LotteryRepository {
             }
     }
 
+    /**
+     * Finds lotteries whose registration periods have ended.
+     * Randomly selects winners, records losers, and saves the
+     * results using Firestore transactions to prevent repeated draws.
+     */
     fun drawDueLotteries() { // US 0.2.05.01, drawing winners
 
         val currentTime = System.currentTimeMillis()
