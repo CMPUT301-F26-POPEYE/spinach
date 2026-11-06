@@ -53,7 +53,7 @@ class LotteryRepository {
                     if (failed) return@addOnSuccessListener
                     if (campsite.getString("ownerId") != userId) {
                         failed = true
-                        onDone(Exception("Only the campsite owner can create a lottery"))
+                        onDone(Exception("Only the campsite owner can create a lottery. "))
                         return@addOnSuccessListener
                     }
                     remaining -= 1

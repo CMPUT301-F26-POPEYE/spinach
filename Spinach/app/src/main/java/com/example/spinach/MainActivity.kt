@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
                 // Temporary until Ali's CampsiteRepository.ownerCampsites is on main.
                 // Then replace this with a state list filled by ownerCampsites { campsites = it }.
                 val campsites = remember {
-                    listOf(Campsite(id = "test-campsite-talha", name = "Test campsite"))
+                    listOf(Campsite(id = "test-campsites-aarish", name = "Lakeside Site 4"))
                 }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
