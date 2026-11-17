@@ -31,21 +31,18 @@ private sealed interface OwnerScreen {
     data object Home : OwnerScreen
     data object Reservations : OwnerScreen
     data object CreateLottery : OwnerScreen
-    data object SentNotifications : OwnerScreen
     data object RegisterCampsite : OwnerScreen
     data class EditCampsite(val id: String, val name: String) : OwnerScreen
     data class CampsiteMenu(val id: String, val name: String) : OwnerScreen
     data class BookedDates(val id: String, val name: String) : OwnerScreen
     data class Waitlist(val id: String, val name: String) : OwnerScreen
     data class Notify(val id: String, val name: String) : OwnerScreen
-    data class Rules(val id: String, val name: String) : OwnerScreen
 }
 
 private fun backTarget(screen: OwnerScreen): OwnerScreen = when (screen) {
     is OwnerScreen.BookedDates -> OwnerScreen.CampsiteMenu(screen.id, screen.name)
     is OwnerScreen.Waitlist -> OwnerScreen.CampsiteMenu(screen.id, screen.name)
     is OwnerScreen.Notify -> OwnerScreen.CampsiteMenu(screen.id, screen.name)
-    is OwnerScreen.Rules -> OwnerScreen.CampsiteMenu(screen.id, screen.name)
     is OwnerScreen.EditCampsite -> OwnerScreen.CampsiteMenu(screen.id, screen.name)
     else -> OwnerScreen.Home
 }
@@ -73,16 +70,11 @@ fun OwnerApp(ownerId: String, campsites: List<Campsite>, modifier: Modifier = Mo
                 onOpenCampsite = { screen = OwnerScreen.CampsiteMenu(it.id, it.name) },
                 onOpenReservations = { screen = OwnerScreen.Reservations },
                 onCreateLottery = { screen = OwnerScreen.CreateLottery },
-                onSentNotifications = { screen = OwnerScreen.SentNotifications },
                 onRegisterCampsite = { screen = OwnerScreen.RegisterCampsite },
                 modifier = Modifier.weight(1f),
             )
             OwnerScreen.Reservations -> OwnerReservationsScreen(
                 ownerId = ownerId,
-                modifier = Modifier.weight(1f),
-            )
-            OwnerScreen.SentNotifications -> SentNotificationsScreen(
-                senderId = ownerId,
                 modifier = Modifier.weight(1f),
             )
             OwnerScreen.CreateLottery -> CreateLotteryScreen(
@@ -115,7 +107,6 @@ fun OwnerApp(ownerId: String, campsites: List<Campsite>, modifier: Modifier = Mo
                 onBookedDates = { screen = OwnerScreen.BookedDates(current.id, current.name) },
                 onWaitlist = { screen = OwnerScreen.Waitlist(current.id, current.name) },
                 onNotify = { screen = OwnerScreen.Notify(current.id, current.name) },
-                onRules = { screen = OwnerScreen.Rules(current.id, current.name) },
                 modifier = Modifier.weight(1f),
             )
             is OwnerScreen.BookedDates -> BookedDatesScreen(
@@ -126,12 +117,6 @@ fun OwnerApp(ownerId: String, campsites: List<Campsite>, modifier: Modifier = Mo
             is OwnerScreen.Waitlist -> WaitlistScreen(
                 campsiteId = current.id,
                 campsiteName = current.name,
-                modifier = Modifier.weight(1f),
-            )
-            is OwnerScreen.Rules -> CampsiteRulesScreen(
-                campsiteId = current.id,
-                campsiteName = current.name,
-                ownerId = ownerId,
                 modifier = Modifier.weight(1f),
             )
             is OwnerScreen.Notify -> SendNotificationScreen(
@@ -150,7 +135,6 @@ private fun OwnerHomeScreen(
     onOpenCampsite: (Campsite) -> Unit,
     onOpenReservations: () -> Unit,
     onCreateLottery: () -> Unit,
-    onSentNotifications: () -> Unit,
     onRegisterCampsite: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -168,11 +152,6 @@ private fun OwnerHomeScreen(
         item {
             OutlinedButton(onClick = onCreateLottery, modifier = Modifier.fillMaxWidth()) {
                 Text("Create a lottery")
-            }
-        }
-        item {
-            OutlinedButton(onClick = onSentNotifications, modifier = Modifier.fillMaxWidth()) {
-                Text("Sent notifications")
             }
         }
         item { Text("My campsites", style = MaterialTheme.typography.titleMedium) }
@@ -218,7 +197,6 @@ private fun CampsiteMenu(
     onBookedDates: () -> Unit,
     onWaitlist: () -> Unit,
     onNotify: () -> Unit,
-    onRules: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // campsites only holds this owner's campsites, so another owner's campsite is not found.
@@ -243,9 +221,6 @@ private fun CampsiteMenu(
         }
         OutlinedButton(onClick = onNotify, modifier = Modifier.fillMaxWidth()) {
             Text("Notify the waitlist")
-        }
-        OutlinedButton(onClick = onRules, modifier = Modifier.fillMaxWidth()) {
-            Text("Campsite rules")
         }
     }
 }

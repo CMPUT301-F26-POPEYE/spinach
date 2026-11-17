@@ -17,8 +17,4 @@ object NotificationRules {
         pairs: List<Pair<String, String>>,
         optedOut: Set<String>,
     ): List<Pair<String, String>> = pairs.filter { it.second !in optedOut }
-
-    // US 02.10.02 and US 03.08.01
-    fun newestFirst(notifications: List<Notification>): List<Notification> =
-        notifications.sortedByDescending { it.createdAt }
 }
