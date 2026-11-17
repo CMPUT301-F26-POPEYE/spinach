@@ -35,6 +35,8 @@ import kotlinx.coroutines.launch
  * @param campsite The campsite to show.
  * @param onDismiss Called when the popup should close.
  */
+
+//made use of Claude to help with the popup window by asking the prompt 'How do i display a popup window and also have it dismiss after a certain action'
 @Composable
 fun CampsiteDetailsDialog(campsite: Campsite, onDismiss: () -> Unit) {
     val context = LocalContext.current
