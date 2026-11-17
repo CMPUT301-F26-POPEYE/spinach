@@ -6,7 +6,7 @@ import kotlinx.coroutines.tasks.await
 //To do: Take in query -> Match to Name | Location -> Return Campsite Summaries
 //If Match = Null, then return 'Sorry, There doesn't seem to be anything matching your search
 
-//will do AI citations later
+//Made use of Claude Sonnet to help with the date range matching filter by asking the prompt 'how do i filter down a list of locations so that they stay within my date range'
 
 
 /**
@@ -57,7 +57,6 @@ suspend fun filterCampsites(
     endDate: Long? = null,
     guests: Int? = null,
 ): List<Campsite> {
-    //CITE AI FOR THIS PORTION
     val reservations: List<Reservation> =
         if (startDate == null) {
             emptyList()

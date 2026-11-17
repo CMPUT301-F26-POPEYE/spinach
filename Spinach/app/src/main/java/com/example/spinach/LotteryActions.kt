@@ -8,7 +8,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
-
+//Made use of Claude for help with the device EntrantId with the prompt 'how do I do this'
 /**
  * The id that identifies this entrant in a lottery waitlist.
  * Returns the signed-in Firebase UID, the same id the rest of the app uses, falling back
