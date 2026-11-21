@@ -92,6 +92,36 @@ class EntrantLotteryRepository(
             .addOnFailureListener { onDone(Result.failure(it)) }
     }
 
+
+    /**
+     * Saves an entrant's decision to decline a lottery win.
+     *
+     * Added with the help of ChatGPT, OpenAI,
+     * "CMPUT 301 Lottery Decline Implementation", November 20, 2026.
+     */
+    fun decline(
+        lottery: Lottery, entrantId: String, onDone: (Result<Unit>) -> Unit,
+    ) {
+        val reference = lotteries.document(lottery.id)
+
+        db.runTransaction { transaction ->
+            // Get the latest lottery before updating it
+            val current = transaction.get(reference).toObject(Lottery::class.java) ?: throw IllegalArgumentException("Lottery not found")
+
+            val error = EntrantLotteryRules.declineError(current, entrantId)
+            if (error != null) throw IllegalArgumentException(error)
+
+            // Save the entrant's decision
+            transaction.update(reference, "declined", FieldValue.arrayUnion(entrantId)
+            )
+
+            Unit
+        }
+            .addOnSuccessListener { onDone(Result.success(Unit)) }
+            .addOnFailureListener { onDone(Result.failure(it)) }
+    }
+
+
     private fun listen(
         query: Query,
         onResult: (List<Lottery>) -> Unit,

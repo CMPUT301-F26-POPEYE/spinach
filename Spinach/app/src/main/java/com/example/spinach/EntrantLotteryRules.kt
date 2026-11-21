@@ -3,7 +3,7 @@ package com.example.spinach
 
 
 /** What happened to one entrant in one lottery. */
-enum class LotteryResult { WAITING, WON, LOST }
+enum class LotteryResult { WAITING, WON, LOST, DECLINED }
 
 /**
  * EntrantLotteryRules
@@ -36,6 +36,20 @@ object EntrantLotteryRules {
         return null
     }
 
+
+    /**
+     * Checks if an entrant is allowed to decline a lottery win.
+     *
+     */
+    fun declineError(lottery: Lottery, entrantId: String): String? {
+        if (!lottery.drawn) return "The lottery has not been drawn yet"
+        if (!lottery.winners.contains(entrantId)) return "You did not win this lottery"
+        if (lottery.declined.contains(entrantId)) return "You already declined this win"
+
+        return null
+    }
+
+
     /**
      * Finds out what happened to an entrant in a lottery (US 01.03.01, US 01.03.02).
      *
@@ -44,6 +58,7 @@ object EntrantLotteryRules {
      * @return WON if they are a winner, LOST if they are a loser, otherwise WAITING.
      */
     fun resultFor(lottery: Lottery, entrantId: String): LotteryResult {
+        if (lottery.declined.contains(entrantId)) return LotteryResult.DECLINED//US 1.04.03
         if (lottery.winners.contains(entrantId)) return LotteryResult.WON
         if (lottery.losers.contains(entrantId)) return LotteryResult.LOST
         return LotteryResult.WAITING
@@ -54,6 +69,7 @@ object EntrantLotteryRules {
      * @return The title, or `null` while the entrant is still waiting (nothing to show).
      */
     fun resultTitle(result: LotteryResult): String? = when (result) {
+        LotteryResult.DECLINED -> "Win declined" //US 1.04.03
         LotteryResult.WON -> "You won!"
         LotteryResult.LOST -> "Lottery result"
         LotteryResult.WAITING -> null
@@ -66,6 +82,7 @@ object EntrantLotteryRules {
     fun resultMessage(result: LotteryResult): String? = when (result) {
         LotteryResult.WON -> "You won the lottery! Pick your dates and reserve your campsite."
         LotteryResult.LOST -> "Sorry, you were not selected in this lottery."
+        LotteryResult.DECLINED -> "You declined this lottery win and can no longer reserve."//US 1.04.03
         LotteryResult.WAITING -> null
     }
 }
