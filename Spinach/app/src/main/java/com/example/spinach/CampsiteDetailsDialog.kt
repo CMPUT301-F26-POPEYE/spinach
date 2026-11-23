@@ -37,6 +37,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
  * - US 01.13.01: Rate a campsite.
  * - US 01.13.02: Write a campsite review.
  *
+ *  Rating and review functionality developed with the help of ChatGPT, OpenAI, "CMPUT 301 Campsite Ratings and Reviews", November 23, 2026.
+ *
  * @param campsite The campsite to show.
  * @param onDismiss Called when the popup should close.
  */
