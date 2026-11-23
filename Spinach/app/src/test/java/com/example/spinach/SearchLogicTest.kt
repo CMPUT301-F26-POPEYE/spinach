@@ -10,9 +10,6 @@ import org.junit.Before
 import org.junit.Test
 import java.util.Locale
 
-// This code was produced partly by Claude Sonnet 5.5, 6/11/2026 over the prompt
-// "make tests following the before pattern".
-
 /**
  * SearchLogicTest
  * Unit tests for the search, filter and display functions in SearchLogic.kt.
@@ -26,6 +23,9 @@ import java.util.Locale
  * - US 01.01.04 As an entrant, I want to see campsite summary information including name, location, maximum occupancy, and rating.
  * - US 01.01.05 As an entrant, I want to see details of a campsite.
  */
+
+//used Claude to help make tests using the prompt 'make tests for the Search logic following
+//user story parameters
 class SearchLogicTest {
 
     private val day = ReservationQueries.DAY_MILLIS

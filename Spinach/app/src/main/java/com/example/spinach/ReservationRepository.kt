@@ -27,6 +27,22 @@ class ReservationRepository(
     ): ListenerRegistration =
         listen(reservations.whereEqualTo("campsiteId", campsiteId), onResult, onError)
 
+    // US 02.08.01: only the owner of the reservation can reject it. Rejecting frees the dates,
+    // because only ACTIVE reservations count as booked.
+    fun reject(reservation: Reservation, ownerId: String, onDone: (Result<Unit>) -> Unit) {
+        if (reservation.id.isEmpty() || reservation.ownerId != ownerId) {
+            onDone(Result.failure(Exception("Only the campsite owner can reject a reservation")))
+            return
+        }
+        if (!ReservationQueries.canReject(reservation, ReservationQueries.todayUtcMidnight())) {
+            onDone(Result.failure(Exception("Only an upcoming active reservation can be rejected")))
+            return
+        }
+        reservations.document(reservation.id).update("status", ReservationStatus.REJECTED.name)
+            .addOnSuccessListener { onDone(Result.success(Unit)) }
+            .addOnFailureListener { onDone(Result.failure(it)) }
+    }
+
     // Creates the reservation, or overwrites it when it already has an id.
     fun save(reservation: Reservation, onDone: (Result<String>) -> Unit) {
         val document = if (reservation.id.isEmpty()) {

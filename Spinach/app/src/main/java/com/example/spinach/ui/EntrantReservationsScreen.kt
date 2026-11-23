@@ -27,14 +27,17 @@ import com.example.spinach.ui.theme.SpinachTheme
 
 
 /**
- * EntrantReservationsScreen
- * Lists the entrant's active reservations and lets them cancel one.
+ * Displays the entrant's active and past reservations.
+ * Loads reservations from Firebase and allows active reservartions to be cancelled.
  *
- * To cover:
- * - US 01.06.01 As an entrant, I want to view a list of my active reservations.
- * - US 01.07.01 As an entrant, I want to cancel my campsite reservation.
+ * Covers:
+ * - US 01.06.01: View active reservations.
+ * - US 01.06.02: View past reservations.
+ * - US 01.07.01: Cancel a reservation.
  *
- * @param entrantId The id of the signed-in entrant (the Firebase uid, like ownerId).
+ * @param entrantId The ID of the signed-in entrant.
+ * @param modifier Modifier used for the screen layout.
+ * @param repository Repository used to load and cancel reservations.
  */
 @Composable
 fun EntrantReservationsScreen(
@@ -80,7 +83,17 @@ fun EntrantReservationsScreen(
     )
 }
 
-
+/**
+ * Displays active and past reservations in separate sections.
+ * Past reservations are filtered to exclude cancelled and rejected bookings.
+ *
+ * @param reservations List of reservations loaded for the entrant.
+ * @param message Success message to display, if any.
+ * @param error Error message to display, if any.
+ * @param today Current day used to separate active and past reservations.
+ * @param onCancel Called when the entrant chooses to cancel a reservation.
+ * @param modifier Modifier used for the scren layout.
+ */
 @Composable
 fun EntrantReservationsContent(
     reservations: List<Reservation>,
@@ -91,6 +104,11 @@ fun EntrantReservationsContent(
     modifier: Modifier = Modifier,
 ) {
     val active = remember(reservations, today) { ReservationQueries.active(reservations, today) }
+
+    //past reservations
+    val past = remember(reservations, today) {
+        ReservationQueries.past(reservations, today)
+    }
     // the reservation the entrant tapped Cancel on, while we ask them to confirm
     var toCancel by remember { mutableStateOf<Reservation?>(null) }
 
@@ -133,7 +151,26 @@ fun EntrantReservationsContent(
                 MyReservationCard(reservation, onCancel = { toCancel = reservation })
             }
         }
-    }
+
+
+            item {//US 01.06.02show entrants past reservations
+                Text(text = "Past reservations (${past.size})", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp),
+                )
+            }
+
+            if (past.isEmpty()) {//show message if no past resrervations
+                item {
+                    Text(
+                        text = "You have no past reservations.", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp,
+                        ),
+                    )
+                }
+            } else {//display each past res using card
+                items(past) { reservation -> PastReservationCard(reservation)
+                }
+            }
+        }
+
 
     toCancel?.let { reservation ->
         AlertDialog(
@@ -184,6 +221,33 @@ private fun MyReservationCard(reservation: Reservation, onCancel: () -> Unit) {
     }
 }
 
+/**
+ * Displays a past reservation with its campsite name and reserved dates.
+ * Past reservations are read-only and cannot be cancelled.
+ *
+ * @param reservation The past reservation to display.
+ */
+//This function was generated with help of CHATGPT, OpenAI, "CMPUT 301 past reservations implimentation", November 18, 2026
+@Composable
+private fun PastReservationCard(reservation: Reservation) {
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+
+            Text(//show campsite name
+                text = reservation.campsiteName.ifEmpty { "Unnamed campsite"
+                }, style = MaterialTheme.typography.titleSmall,
+            )
+
+            Text(//show dates reserved
+                text = ReservationQueries.describeDates(reservation.dates), style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun EntrantReservationsPreview() {
@@ -197,6 +261,8 @@ private fun EntrantReservationsPreview() {
         Reservation(campsiteName = "Pine Ridge", dates = mutableListOf(today + 10 * day)),
     )
     SpinachTheme {
+
+
         EntrantReservationsContent(
             reservations = sample,
             message = null,

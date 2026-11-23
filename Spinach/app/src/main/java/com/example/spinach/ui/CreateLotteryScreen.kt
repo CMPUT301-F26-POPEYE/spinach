@@ -1,5 +1,5 @@
 package com.example.spinach.ui
-
+ 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

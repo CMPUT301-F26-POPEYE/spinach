@@ -37,6 +37,10 @@ import com.example.spinach.ui.theme.SpinachTheme
  * - US 01.02.02 As an entrant, I want to leave the waiting list for a campsite lottery.
  * - US 01.03.01 As an entrant, I want to receive a notification when I win the campsite lottery.
  * - US 01.03.02 As an entrant, I want to receive a notification when I lose the campsite lottery.
+ * - US 01.04.03 As an entrant, I want to decline my lottery win.
+ *
+ *  Decline functionality added with the help of ChatGPT, OpenAI,
+ *  "Lottery Decline Implementation", November 20, 2026.
  *
  * @param entrantId The id of the signed-in entrant (the Firebase uid, like ownerId).
  * @param onReserve Called when a winner taps Reserve, with the lottery they won.
@@ -78,11 +82,27 @@ fun EntrantLotteriesScreen(
     }
 
     EntrantLotteriesContent(
+        entrantId = entrantId,
         waiting = waiting,
         won = won,
         lost = lost,
         message = message,
         error = error,
+
+        onDecline = { lottery ->
+            repository.decline(lottery, entrantId) { result ->
+                result
+                    .onSuccess {
+                        message = "Lottery win declined"
+                        error = null
+                    }
+                    .onFailure {
+                        error = it.message ?: "Could not decline win"
+                        message = null
+                    }
+            }
+        },
+
         onLeave = { lottery ->
             repository.leaveWaitlist(lottery, entrantId) { result ->
                 result
@@ -103,17 +123,22 @@ fun EntrantLotteriesScreen(
 
 @Composable
 fun EntrantLotteriesContent(
+    entrantId: String,
     waiting: List<Lottery>,
     won: List<Lottery>,
     lost: List<Lottery>,
     message: String?,
     error: String?,
     onLeave: (Lottery) -> Unit,
+    onDecline: (Lottery) -> Unit,
     onReserve: (Lottery) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // the lottery the entrant tapped Leave on, while we ask them to confirm
+    // The lottery the entrant wants to leave
     var toLeave by remember { mutableStateOf<Lottery?>(null) }
+
+    // US 01.04.03: Lottery selected for declining
+    var toDecline by remember { mutableStateOf<Lottery?>(null) }
 
     LazyColumn(modifier = modifier.fillMaxWidth()) {
         if (error != null) {
@@ -172,12 +197,31 @@ fun EntrantLotteriesContent(
                 )
             }
         }
+
         items(won) { lottery ->
-            ResultCard(lottery, LotteryResult.WON, onReserve = { onReserve(lottery) })
+            val result = EntrantLotteryRules.resultFor(lottery, entrantId)
+
+            ResultCard(
+                lottery = lottery,
+                result = result,
+                onReserve = if (result == LotteryResult.WON) {
+                    { onReserve(lottery) }
+                } else null,
+                onDecline = if (result == LotteryResult.WON) {
+                    { toDecline = lottery }
+                } else null,
+            )
         }
+
         items(lost) { lottery ->
-            ResultCard(lottery, LotteryResult.LOST, onReserve = null)
+            ResultCard(
+                lottery = lottery,
+                result = LotteryResult.LOST,
+                onReserve = null,
+                onDecline = null,
+            )
         }
+
     }
 
     toLeave?.let { lottery ->
@@ -202,6 +246,28 @@ fun EntrantLotteriesContent(
             },
         )
     }
+
+
+    toDecline?.let { lottery ->
+        AlertDialog(
+            onDismissRequest = { toDecline = null },
+            title = { Text("Decline lottery win?") },
+            text = {Text("You will no longer be able to reserve from this lottery.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { onDecline(lottery)
+                        toDecline = null
+                    }
+                ) { Text("Decline win")
+                }
+            },
+            dismissButton = { TextButton(onClick = { toDecline = null }) { Text("Keep win")
+                }
+            }
+        )
+    }
+
 }
 
 @Composable
@@ -225,9 +291,15 @@ private fun WaitingLotteryCard(lottery: Lottery, onLeave: () -> Unit) {
     }
 }
 
-// onReserve is null for a lost lottery, so there is no button
+/**
+ * Shows the lottery result and the available actions.
+ * Declined wins have no Reserve or Decline buttons.
+ *
+ * Updated with the help of ChatGPT, OpenAI,
+ * created with help of "CMPUT 301 Lottery Decline Implementation", November 20, 2026.
+ */
 @Composable
-private fun ResultCard(lottery: Lottery, result: LotteryResult, onReserve: (() -> Unit)?) {
+private fun ResultCard(lottery: Lottery, result: LotteryResult, onReserve: (() -> Unit)?, onDecline: (() -> Unit)?) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -255,6 +327,12 @@ private fun ResultCard(lottery: Lottery, result: LotteryResult, onReserve: (() -
                     Text("Reserve")
                 }
             }
+            // Show decline only for winners
+            if (onDecline != null) {
+                TextButton(onClick = onDecline) {
+                    Text("Decline win")
+                }
+            }
         }
     }
 }
@@ -279,6 +357,7 @@ private fun EntrantLotteriesPreview() {
                     bookingStart = today + 10 * day,
                     bookingEnd = today + 20 * day,
                     drawn = true,
+                    winners = mutableListOf("test-entrant"),
                 ),
             ),
             lost = listOf(Lottery(id = "l3", drawn = true)),
@@ -286,6 +365,8 @@ private fun EntrantLotteriesPreview() {
             error = null,
             onLeave = {},
             onReserve = {},
+            entrantId = "test-entrant",
+            onDecline = {},
         )
     }
 }

@@ -18,7 +18,7 @@ import com.google.firebase.firestore.Exclude
 /**
  * Represents a campsite lottery and its registration and booking periods.
  */
-
+//This class was generated with help of CHATGPT, OpenAI, "CMPUT 301 Lottery implimentation", November 5, 2026
 class Lottery(
     @DocumentId var id: String = "",
     var campsiteId: String = "",
@@ -34,6 +34,7 @@ class Lottery(
     var drawn: Boolean = false,
     var campsiteIds: MutableList<String> = mutableListOf(),// US 02.04.02, every campsite in this lottery
     var waitlistCapacity: Int? = null,// US 02.04.07, null means no limit
+    var declined: MutableList<String> = mutableListOf(),//won but not reserve US 1.04.03
 ) {
 
     /**
@@ -93,6 +94,7 @@ class Lottery(
     fun canReserve(userId: String, now: Long): Boolean {//checking conditions before entrant reserves
         return drawn &&//finished selecting
                 winners.contains(userId) &&//wom
+                !declined.contains(userId) &&
                 now >= bookingStart &&
                 now < bookingEnd + 86_400_000L//date checks
     }

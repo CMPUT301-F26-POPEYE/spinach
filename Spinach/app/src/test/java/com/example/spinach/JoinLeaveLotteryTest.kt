@@ -6,8 +6,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// This code was produced partly by Claude Sonnet 5.5, 6/11/2026 over the prompt
-// "make these search files logically correct".
 
 /**
  * JoinLeaveLotteryTest
@@ -18,6 +16,10 @@ import org.junit.Test
  * - US 01.01.06 As an entrant, I want to join an active lottery from the campsite details screen.
  * - US 01.02.01 As an entrant, I want to join the waiting list for a campsite lottery.
  */
+
+//used Claude Sonnet to help make tests using the prompt 'make tests for the Search logic following
+//user story parameters
+
 class JoinLeaveLotteryTest {
 
     private val day = ReservationQueries.DAY_MILLIS

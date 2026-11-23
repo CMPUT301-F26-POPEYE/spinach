@@ -53,6 +53,8 @@ data class CampsiteFilters(
  * @param onApply Called with the new filters when the entrant applies or clears them.
  * @param onDismiss Called when the entrant closes the popup without applying.
  */
+
+//Made use of Claude Sonnet to use the Date picking portion with the prompt 'How do I select a date range and have my conditions match it'
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterDialog(
