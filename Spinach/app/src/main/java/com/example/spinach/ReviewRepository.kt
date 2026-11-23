@@ -14,6 +14,26 @@ class ReviewRepository(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
 
+
+    /**
+     * Gets the review this entrant previously wrote for a campsite.
+     *
+     * Created with the help of ChatGPT, OpenAI,
+     * "CMPUT 301 Campsite Reviews", November 23, 2026.
+     */
+    suspend fun getMyReview(campsiteId: String, entrantId: String): String {
+        // Look for the entrant's existing review
+        val snapshot = db.collection("campsites")
+            .document(campsiteId)
+            .collection("reviews")
+            .document(entrantId)
+            .get()
+            .await()
+
+        return snapshot.toObject(Review::class.java)?.comment.orEmpty()
+    }
+
+
     /**
      * Saves a rating for a campsite.
      * If the entrant rated it before, their old rating is replaced.
@@ -79,6 +99,56 @@ class ReviewRepository(
             .await()
 
         return snapshot.toObject(Review::class.java)?.rating ?: 0
+    }
+
+    /**
+     * Saves a written review for a campsite.
+     * If the entrant already left a review, their old comment is replaced.
+     *
+     * Created with the help of ChatGPT, OpenAI,
+     * "CMPUT 301 Campsite Reviews", November 23, 2026.
+     */
+    suspend fun saveReview(
+        campsiteId: String,
+        entrantId: String,
+        comment: String
+    ) {
+        // Don't save empty reviews
+        if (comment.isBlank()) {
+            throw IllegalArgumentException("Review cannot be empty")
+        }
+
+        val campsiteRef = db.collection("campsites").document(campsiteId)
+
+        // Each entrant has one review document per campsite
+        val reviewRef = campsiteRef.collection("reviews").document(entrantId)
+
+        db.runTransaction { transaction ->
+            val campsite = transaction.get(campsiteRef)
+                .toObject(Campsite::class.java)
+                ?: throw IllegalArgumentException("Campsite not found")
+
+            val previous = transaction.get(reviewRef)
+                .toObject(Review::class.java)
+                ?: throw IllegalArgumentException("Rate this campsite first")
+
+            val comments = campsite.reviews.toMutableList()
+
+            // Remove their previous comment if they are editing their review
+            if (previous.comment.isNotBlank()) {
+                comments.remove(previous.comment)
+            }
+
+            // Add the new comment to the campsite's reviews
+            val updatedComment = comment.trim()
+            comments.add(updatedComment)
+
+            // Save the comment while keeping the original rating
+            transaction.update(campsiteRef, "reviews", comments)
+            transaction.update(reviewRef, "comment", updatedComment)
+
+            Unit
+        }.await()
     }
 }
 
