@@ -1,6 +1,7 @@
 package com.example.spinach
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -48,6 +49,27 @@ fun CampsiteDetailsDialog(campsite: Campsite, onDismiss: () -> Unit) {
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
+    // US 01.13.01: Rating state and Firebase repository
+    val reviewRepository = remember { ReviewRepository() }
+    val campsiteRepository = remember { CampsiteRepository() }
+
+
+    // Keep track of the rating selected by the entrant
+    var myRating by remember(campsite.id) {
+        mutableStateOf(0)
+    }
+
+    // Keep a copy of the campsite so we can update its average rating
+    var currentCampsite by remember(campsite.id) {
+        mutableStateOf(campsite)
+    }
+
+    // Prevent multiple saves while Firebase is updating
+    var savingRating by remember {
+        mutableStateOf(false)
+    }
+
+
     LaunchedEffect(campsite.id) {
         try {
             lottery = getActiveLottery(campsite.id)
@@ -60,6 +82,20 @@ fun CampsiteDetailsDialog(campsite: Campsite, onDismiss: () -> Unit) {
         checked = true
     }
 
+    // US 01.13.01: Load the entrant's previous rating
+    LaunchedEffect(campsite.id, entrantId) {
+        try {
+            myRating = reviewRepository.getMyRating(
+                campsite.id,
+                entrantId
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = e.message ?: "Could not load rating"
+        }
+    }
+
     val l = lottery
 
     AlertDialog(
@@ -68,6 +104,65 @@ fun CampsiteDetailsDialog(campsite: Campsite, onDismiss: () -> Unit) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 detailLines(campsite).forEach { Text(it) }
+
+                // US 01.13.01: Rating section
+                Text("")
+                Text("Rate this campsite")
+
+                Row {
+                    (1..5).forEach { star ->
+                        TextButton(
+                            onClick = { myRating = star }
+                        ) {
+                            Text(
+                                if (star <= myRating) "★" else "☆"
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    if (myRating == 0) {
+                        "Select a rating from 1 to 5"
+                    } else {
+                        "Your rating: $myRating / 5"
+                    }
+                )
+
+                Button(
+                    enabled = myRating in 1..5 && !savingRating,
+                    onClick = {
+                        savingRating = true
+
+                        scope.launch {
+                            try {
+                                // Save or replace this entrant's rating
+                                reviewRepository.saveRating(
+                                    campsite.id,
+                                    entrantId,
+                                    myRating
+                                )
+
+                                // Reload the campsite to display its new average
+                                currentCampsite =
+                                    campsiteRepository.getCampsite(campsite.id)
+                                        ?: currentCampsite
+
+                                message = "Rating saved!"
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                message = e.message ?: "Could not save rating"
+                            } finally {
+                                savingRating = false
+                            }
+                        }
+                    }
+                ) {
+                    Text(if (savingRating) "Saving..." else "Save rating")
+                }
+
+
                 if (l != null) lotteryLines(l).forEach { Text(it) }
                 message?.let {
                     Text("")
