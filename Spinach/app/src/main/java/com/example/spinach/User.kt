@@ -25,6 +25,8 @@ import android.provider.Settings
 * @property roles All roles this user is allowed to act as. Everyone is an ENTRANT by default.
 * @property activeRole The role this user is currently acting as.
 * @property trustedDeviceIds Devices that can skip the password (US 01.09.01).
+* @property profileImage The user's profile picture as Base64 JPEG text made by [ProfileImage.encode],
+* or null for no picture. Set, replaced and cleared from the profile screen.
 *
  */
 class User (
@@ -36,7 +38,8 @@ class User (
     var notificationsEnabled: Boolean = false,
     var roles: MutableList<Role> = mutableListOf(Role.ENTRANT),
     var activeRole: Role = Role.ENTRANT,
-    var trustedDeviceIds: MutableList<String> = mutableListOf()
+    var trustedDeviceIds: MutableList<String> = mutableListOf(),
+    var profileImage: String? = null,
     ) {
 
         /** Roles a single user can act as (US 03.11.01). */
@@ -79,6 +82,7 @@ class User (
             email = null
             phoneNumber = null
             notificationsEnabled = false
+            profileImage = null
         }
 
         // ---------------------------------------------------------------- roles

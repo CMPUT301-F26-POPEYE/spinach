@@ -17,6 +17,14 @@ import com.google.firebase.firestore.Exclude
 
 /**
  * Represents a campsite lottery and its registration and booking periods.
+ *
+ * A lottery can be shared: when [openToOtherOwners] is true, other campsite owners may add
+ * their own campsites to it until it is drawn, so several owners list campsites in one
+ * lottery for the same period. [ownerId] is the owner who created it; [ownerIds] holds the
+ * other owners who added campsites.
+ *
+ * @property ownerIds Owners other than [ownerId] who added a campsite to this lottery.
+ * @property openToOtherOwners Whether other owners may add their campsites to this lottery.
  */
 //This class was generated with help of CHATGPT, OpenAI, "CMPUT 301 Lottery implimentation", November 5, 2026
 class Lottery(
@@ -35,7 +43,34 @@ class Lottery(
     var campsiteIds: MutableList<String> = mutableListOf(),// US 02.04.02, every campsite in this lottery
     var waitlistCapacity: Int? = null,// US 02.04.07, null means no limit
     var declined: MutableList<String> = mutableListOf(),//won but not reserve US 1.04.03
+    var ownerIds: MutableList<String> = mutableListOf(),// shared lottery, other owners who added campsites
+    var openToOtherOwners: Boolean = false,// shared lottery, creator lets other owners add campsites
 ) {
+
+    /**
+     * Returns every owner with a campsite in this lottery, the creator first.
+     */
+    // Shared lottery story
+    @Exclude
+    fun owners(): List<String> = (listOf(ownerId) + ownerIds).filter { it.isNotBlank() }.distinct()
+
+    /**
+     * Checks whether an owner may add one of their campsites to this lottery.
+     *
+     * @param userId The owner trying to add the campsite.
+     * @param campsiteId The campsite being added.
+     * @param campsiteOwnerId The owner stored on that campsite, or null if it wasn't found.
+     * @return Why the campsite can't be added, or null if it can.
+     */
+    // Shared lottery story
+    @Exclude
+    fun addCampsiteError(userId: String, campsiteId: String, campsiteOwnerId: String?): String? = when {
+        drawn -> "This lottery has already been drawn"
+        !openToOtherOwners && userId != ownerId -> "This lottery is not open to other owners"
+        campsiteOwnerId != userId -> "You can only add your own campsites"
+        campsiteId in campsites() -> "That campsite is already in this lottery"
+        else -> null
+    }
 
     /**
      * Validates registration dates, booking dates, winner count,  waitlist capacity.

@@ -80,6 +80,8 @@ class EntrantReservationRepository(
      * Saves a reservation for a lottery winner (US 01.05.01).
      * It first loads the campsite's reservations to find the dates that are already taken,
      * then checks EntrantReservationRules.confirmError. Nothing is saved if a rule fails.
+     * The reservation's ownerId is the campsite's owner, which in a shared lottery may not
+     * be the lottery's creator.
      * The caller must set campsiteId, campsiteName, dates and rulesAcknowledged on the
      * reservation. After onDone succeeds, show EntrantReservationRules.confirmationMessage
      * as the confirmation.
@@ -115,13 +117,19 @@ class EntrantReservationRepository(
                 // fill in who and what this reservation belongs to
                 reservation.entrantId = entrantId
                 reservation.lotteryId = lottery.id
-                reservation.ownerId = lottery.ownerId
                 reservation.status = ReservationStatus.ACTIVE
                 reservation.createdAt = now
 
-                val document = reservations.document()
-                document.set(reservation)
-                    .addOnSuccessListener { onDone(Result.success(document.id)) }
+                // In a shared lottery the campsite may belong to a different owner than the
+                // lottery, so the reservation goes to the campsite's own owner
+                reservations.firestore.collection("campsites").document(reservation.campsiteId).get()
+                    .addOnSuccessListener { campsite ->
+                        reservation.ownerId = campsite.getString("ownerId") ?: lottery.ownerId
+                        val document = reservations.document()
+                        document.set(reservation)
+                            .addOnSuccessListener { onDone(Result.success(document.id)) }
+                            .addOnFailureListener { onDone(Result.failure(it)) }
+                    }
                     .addOnFailureListener { onDone(Result.failure(it)) }
             }
             .addOnFailureListener { onDone(Result.failure(it)) }

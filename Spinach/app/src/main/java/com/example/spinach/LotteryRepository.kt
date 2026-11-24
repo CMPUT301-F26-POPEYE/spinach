@@ -1,6 +1,7 @@
 
 package com.example.spinach
 
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 
@@ -105,6 +106,59 @@ class LotteryRepository {
     }
 
     /**
+     * Listens for lotteries that other owners may add campsites to: shared and not yet drawn.
+     * Updates the list whenever Firestore data changes.
+     *
+     * @param onResult Called with the current shared lotteries, or an empty list if they can't be loaded.
+     * @return The listener registration; call remove() on it when the screen closes.
+     */
+    // Shared lottery story
+    fun listenForSharedLotteries(onResult: (List<Lottery>) -> Unit): ListenerRegistration =
+        db.collection("lotteries")
+            .whereEqualTo("openToOtherOwners", true)
+            .whereEqualTo("drawn", false)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    onResult(emptyList())
+                } else {
+                    onResult(snapshot.toObjects(Lottery::class.java))
+                }
+            }
+
+    /**
+     * Adds one of an owner's campsites to a shared lottery.
+     *
+     * Runs in a transaction, so the lottery can't be drawn while the campsite is being added.
+     * The checks are in [Lottery.addCampsiteError], and the Firestore rules enforce the same.
+     *
+     * @param lotteryId The lottery to add the campsite to.
+     * @param campsiteId The campsite to add. It must belong to [userId].
+     * @param userId The signed-in owner.
+     * @param onDone Called with success, or with the reason the campsite couldn't be added.
+     */
+    // Shared lottery story
+    fun addCampsite(lotteryId: String, campsiteId: String, userId: String, onDone: (Result<Unit>) -> Unit) {
+        val lotteryRef = db.collection("lotteries").document(lotteryId)
+        val campsiteRef = db.collection("campsites").document(campsiteId)
+        db.runTransaction { transaction ->
+            val lottery = transaction.get(lotteryRef).toObject(Lottery::class.java)
+                ?: throw IllegalArgumentException("Lottery not found")
+            val campsiteOwner = transaction.get(campsiteRef).getString("ownerId")
+            lottery.addCampsiteError(userId, campsiteId, campsiteOwner)?.let { throw IllegalArgumentException(it) }
+            transaction.update(
+                lotteryRef,
+                mapOf(
+                    "campsiteIds" to FieldValue.arrayUnion(campsiteId),
+                    "ownerIds" to FieldValue.arrayUnion(userId),
+                ),
+            )
+            null
+        }
+            .addOnSuccessListener { onDone(Result.success(Unit)) }
+            .addOnFailureListener { onDone(Result.failure(it)) }
+    }
+
+    /**
      * Finds lotteries whose registration periods have ended.
      * Randomly selects winners, records losers, and saves the
      * results using Firestore transactions to prevent repeated draws.
@@ -128,7 +182,17 @@ class LotteryRepository {
 
                                 lottery.draw()//this will chose the winners and losers
 
-                                transaction.set(document.reference, lottery)//for saving
+                                // update only the draw fields, so fields added later (like ownerIds)
+                                // that older lotteries don't have aren't written and the rules allow it
+                                transaction.update(
+                                    document.reference,
+                                    mapOf(
+                                        "waitlist" to lottery.waitlist,
+                                        "winners" to lottery.winners,
+                                        "losers" to lottery.losers,
+                                        "drawn" to lottery.drawn,
+                                    ),
+                                )
                             }
                         }
                         null

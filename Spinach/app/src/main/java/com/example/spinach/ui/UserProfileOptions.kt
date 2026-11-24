@@ -34,6 +34,15 @@ import androidx.compose.ui.unit.dp
 import com.example.spinach.AccountRepository
 import com.example.spinach.AccountRules
 import com.example.spinach.DeviceAccountStore
+import com.example.spinach.ProfileImage
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import com.example.spinach.User
 import com.example.spinach.UserRepository
 import com.example.spinach.ui.theme.SpinachTheme
@@ -79,7 +88,7 @@ internal fun ContactFields(
     )
 }
 
-// The logged in user's options: edit contact info (US 01.07.03), turn notifications on or
+// The logged in user's options: add, change or remove a profile image, edit contact info (US 01.07.03), turn notifications on or
 // off (US 01.10.01), turn device login on or off (US 01.09.01), switch role (US 03.11.01),
 // log out, and delete the account (US 01.08.01).
 // After onLoggedOut or onProfileDeleted, the caller must discard user and go back to the
@@ -241,6 +250,39 @@ fun UserProfileOptions(
             }
     }
 
+    // Profile image: add, change or remove. The image is stored on the user's
+    // Firestore document as Base64 text (see ProfileImage).
+    var profileImage by remember(user) { mutableStateOf(user.profileImage) }
+    val imageBitmap = remember(profileImage) { profileImage?.let(ProfileImage::decode) }
+
+    // Opens Android's Photo Picker, which needs no storage permission.
+    // A picked photo is shrunk, saved, and shown; if the save fails the old image is kept.
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult // user cancelled the picker
+        val encoded = try {
+            ProfileImage.encode(context, uri)
+        } catch (e: Exception) {
+            status = e.message ?: "Could not read that image"
+            return@rememberLauncherForActivityResult
+        }
+        val old = user.profileImage
+        user.profileImage = encoded
+        saveChange(undo = { user.profileImage = old }) {
+            profileImage = encoded
+            status = "Profile image saved"
+        }
+    }
+
+    // Clears the profile image. If the save fails the old image is put back.
+    fun removeProfileImage() {
+        val old = user.profileImage
+        user.profileImage = null
+        saveChange(undo = { user.profileImage = old }) {
+            profileImage = null
+            status = "Profile image removed"
+        }
+    }
+
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
@@ -248,6 +290,31 @@ fun UserProfileOptions(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text("Profile", style = MaterialTheme.typography.titleLarge)
+        if (imageBitmap != null) {
+            Image(
+                bitmap = imageBitmap,
+                contentDescription = "Profile image",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(96.dp).clip(CircleShape),
+            )
+        } else {
+            Text("No profile image")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                enabled = !busy,
+                onClick = {
+                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                },
+            ) {
+                Text(if (profileImage == null) "Add image" else "Change image")
+            }
+            if (profileImage != null) {
+                OutlinedButton(enabled = !busy, onClick = ::removeProfileImage) {
+                    Text("Remove image")
+                }
+            }
+        }
         Text("Username: ${user.username}")
         ContactFields(
             name = name,

@@ -15,6 +15,10 @@ class CampsiteRepository{
      * Validates a campsite, stamps the current user as its owner, and saves it
      * to Firestore as a new document.
      *
+     * The document ID is created first with `document()`, which needs no network call, so
+     * the campsite's unique QR code ([Campsite.qrCode], from [QRCodeService.payloadFor]) can
+     * be set before the single save (US 02.02.01).
+     *
      * On success, the campsite's [Campsite.id] is updated to the generated
      * document ID.
      *
@@ -27,10 +31,12 @@ class CampsiteRepository{
         val uid = auth.currentUser?.uid ?: throw IllegalArgumentException("Not signed in")
         campsite.ownerId = uid
 
-        val docRef = db.collection("campsites").add(campsite).await()
+        // document() makes a unique ID locally, so the QR code can be set before saving
+        val docRef = db.collection("campsites").document()
+        campsite.qrCode = QRCodeService.payloadFor(docRef.id) // US 02.02.01
+        docRef.set(campsite).await()
         campsite.id = docRef.id
         return docRef.id
-
         /**
          * Listens for changes to the current user's campsites and reports them live.
          *

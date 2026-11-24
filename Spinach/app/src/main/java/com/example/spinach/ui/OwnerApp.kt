@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -25,12 +26,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.spinach.Campsite
+import com.example.spinach.QRCodeService
 import com.example.spinach.ui.theme.SpinachTheme
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 
 private sealed interface OwnerScreen {
     data object Home : OwnerScreen
     data object Reservations : OwnerScreen
     data object CreateLottery : OwnerScreen
+    data object SharedLotteries : OwnerScreen
     data object SentNotifications : OwnerScreen
     data object RegisterCampsite : OwnerScreen
     data class EditCampsite(val id: String, val name: String) : OwnerScreen
@@ -73,6 +78,7 @@ fun OwnerApp(ownerId: String, campsites: List<Campsite>, modifier: Modifier = Mo
                 onOpenCampsite = { screen = OwnerScreen.CampsiteMenu(it.id, it.name) },
                 onOpenReservations = { screen = OwnerScreen.Reservations },
                 onCreateLottery = { screen = OwnerScreen.CreateLottery },
+                onSharedLotteries = { screen = OwnerScreen.SharedLotteries },
                 onSentNotifications = { screen = OwnerScreen.SentNotifications },
                 onRegisterCampsite = { screen = OwnerScreen.RegisterCampsite },
                 modifier = Modifier.weight(1f),
@@ -86,6 +92,11 @@ fun OwnerApp(ownerId: String, campsites: List<Campsite>, modifier: Modifier = Mo
                 modifier = Modifier.weight(1f),
             )
             OwnerScreen.CreateLottery -> CreateLotteryScreen(
+                campsites = campsites,
+                userId = ownerId,
+                modifier = Modifier.weight(1f),
+            )
+            OwnerScreen.SharedLotteries -> SharedLotteriesScreen(
                 campsites = campsites,
                 userId = ownerId,
                 modifier = Modifier.weight(1f),
@@ -150,6 +161,7 @@ private fun OwnerHomeScreen(
     onOpenCampsite: (Campsite) -> Unit,
     onOpenReservations: () -> Unit,
     onCreateLottery: () -> Unit,
+    onSharedLotteries: () -> Unit,
     onSentNotifications: () -> Unit,
     onRegisterCampsite: () -> Unit,
     modifier: Modifier = Modifier,
@@ -168,6 +180,11 @@ private fun OwnerHomeScreen(
         item {
             OutlinedButton(onClick = onCreateLottery, modifier = Modifier.fillMaxWidth()) {
                 Text("Create a lottery")
+            }
+        }
+        item {
+            OutlinedButton(onClick = onSharedLotteries, modifier = Modifier.fillMaxWidth()) {
+                Text("Join a shared lottery")
             }
         }
         item {
@@ -232,6 +249,7 @@ private fun CampsiteMenu(
     ) {
         Text(campsite.name.ifEmpty { "Unnamed campsite" }, style = MaterialTheme.typography.titleLarge)
         ownerDetailLines(campsite).forEach { Text(it) }
+        CampsiteQrCode(campsite)
         Button(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
             Text("Edit details")
         }
@@ -292,4 +310,29 @@ private fun OwnerAppPreview() {
             ),
         )
     }
+}
+
+/**
+ * CampsiteQrCode
+ * Shows a campsite's promotional QR code on the owner's campsite page.
+ *
+ * Campsites registered before QR codes were added have a blank [Campsite.qrCode], so the
+ * code is built from the campsite's ID instead. The result is the same text either way.
+ * The image is only regenerated when the QR text changes.
+ *
+ * To cover:
+ * - US 02.02.01 As a campsite owner, I want the system to generate a unique QR code that
+ *   links to the campsite details.
+ *
+ * @param campsite The campsite whose QR code to show.
+ */
+@Composable
+private fun CampsiteQrCode(campsite: Campsite) {
+    val payload = campsite.qrCode.ifBlank { QRCodeService.payloadFor(campsite.id) }
+    val bitmap = remember(payload) { QRCodeService.toBitmap(QRCodeService.encode(payload)).asImageBitmap() }
+    Image(
+        bitmap = bitmap,
+        contentDescription = "QR code for ${campsite.name}",
+        modifier = Modifier.size(200.dp),
+    )
 }

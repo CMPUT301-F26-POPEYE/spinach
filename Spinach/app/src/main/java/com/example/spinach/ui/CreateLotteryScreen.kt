@@ -29,7 +29,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-// US 02.04.01, 02.04.02, 02.04.03, 02.04.04, 02.04.05, 02.04.07. Dates are typed as yyyy-MM-dd.
+// US 02.04.01, 02.04.02, 02.04.03, 02.04.04, 02.04.05, 02.04.07 and the shared lottery story
+// (the "Let other owners add their campsites" checkbox). Dates are typed as yyyy-MM-dd.
 @Composable
 fun CreateLotteryScreen(campsites: List<Campsite>, userId: String, modifier: Modifier = Modifier) {
     val repository = remember { LotteryRepository() }
@@ -40,6 +41,7 @@ fun CreateLotteryScreen(campsites: List<Campsite>, userId: String, modifier: Mod
     var bookingEnd by remember { mutableStateOf("") }
     var winners by remember { mutableStateOf("") }
     var capacity by remember { mutableStateOf("") }// optional, blank means no limit
+    var openToOthers by remember { mutableStateOf(false) }// shared lottery, other owners may add campsites
     var message by remember { mutableStateOf("") }
 
     Column(
@@ -72,6 +74,17 @@ fun CreateLotteryScreen(campsites: List<Campsite>, userId: String, modifier: Mod
         Field("Number of winners", winners) { winners = it }
         Field("Waitlist capacity (optional)", capacity) { capacity = it }
 
+        // Shared lottery: lets other owners add their own campsites to this lottery
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { openToOthers = !openToOthers },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(checked = openToOthers, onCheckedChange = { openToOthers = it })
+            Text("Let other owners add their campsites")
+        }
+
         Button(onClick = {
             if (selected.isEmpty()) {
                 message = "Select at least one campsite"
@@ -87,6 +100,7 @@ fun CreateLotteryScreen(campsites: List<Campsite>, userId: String, modifier: Mod
                     winnerCount = winners.toIntOrNull() ?: 0,
                     // blank means no limit, text that is not a number becomes 0 so validation rejects it
                     waitlistCapacity = if (capacity.isBlank()) null else (capacity.toIntOrNull() ?: 0),
+                    openToOtherOwners = openToOthers,
                 )
                 repository.create(lottery, userId) { result ->
                     message = result.fold({ "Lottery saved" }, { it.message ?: "Could not save" })
