@@ -136,4 +136,126 @@ class LotteryRepository {
                 }
             }
     }
+
+
+    /**
+     * Updates an existing lottery after checking ownership and dates.
+     * A lottery cannot be changed once winners have been drawn.
+     *
+     * Created with the help of ChatGPT, OpenAI,
+     * "CMPUT 301 Update Lottery Listing", November 23, 2026.
+     */
+    fun update(
+        lottery: Lottery,
+        userId: String,
+        onDone: (Result<Unit>) -> Unit
+    ) {
+        // Check that a lottery and owner were provided
+        if (lottery.id.isBlank() || userId.isBlank()) {
+            onDone(Result.failure(Exception("Lottery or owner is missing")))
+            return
+        }
+
+        // Get the selected campsites without duplicates
+        val campsiteIds = lottery.campsites()
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        if (campsiteIds.isEmpty()) {
+            onDone(Result.failure(Exception("Select at least one campsite")))
+            return
+        }
+
+        // Use the same validation rules as lottery creation
+        lottery.validationError()?.let { error ->
+            onDone(Result.failure(Exception(error)))
+            return
+        }
+
+        val lotteryRef = db.collection("lotteries").document(lottery.id)
+
+        // A transaction prevents saving changes after another user runs the draw
+        db.runTransaction { transaction ->
+            val existing = transaction.get(lotteryRef)
+                .toObject(Lottery::class.java)
+                ?: throw Exception("Lottery not found")
+
+            if (existing.ownerId != userId) {
+                throw Exception("You can only edit your own lotteries")
+            }
+
+            if (existing.drawn) {
+                throw Exception("This lottery has already been drawn")
+            }
+
+            // Make sure the owner owns every selected campsite
+            for (id in campsiteIds) {
+                val campsiteRef = db.collection("campsites").document(id)
+                val campsite = transaction.get(campsiteRef)
+
+                if (campsite.getString("ownerId") != userId) {
+                    throw Exception("You can only select campsites you own")
+                }
+            }
+
+            val capacity = lottery.waitlistCapacity
+
+            // Don't lower capacity below the current number of entrants
+            if (capacity != null && capacity < existing.waitlist.size) {
+                throw Exception("Capacity is below the current waitlist size")
+            }
+
+            // Update editable fields only; keep the current entrants and results
+            transaction.update(
+                lotteryRef,
+                mapOf(
+                    "campsiteId" to campsiteIds.first(),
+                    "campsiteIds" to campsiteIds,
+                    "registrationStart" to lottery.registrationStart,
+                    "registrationEnd" to lottery.registrationEnd,
+                    "bookingStart" to lottery.bookingStart,
+                    "bookingEnd" to lottery.bookingEnd,
+                    "winnerCount" to lottery.winnerCount,
+                    "waitlistCapacity" to capacity
+                )
+            )
+
+            Unit
+        }.addOnSuccessListener {
+            onDone(Result.success(Unit))
+        }.addOnFailureListener { error ->
+            onDone(Result.failure(error))
+        }
+    }
+
+
+    /**
+     * Loads the lotteries created by a specific owner.
+     * The list updates whenever something changes in Firestore.
+     *
+     * Created with the help of ChatGPT, OpenAI,
+     * "CMPUT 301 Update Lottery Listing", November 24, 2026.
+     */
+    fun listenForOwner(
+        ownerId: String,
+        onResult: (List<Lottery>) -> Unit,
+        onError: (Exception) -> Unit
+    ): ListenerRegistration {
+
+        // Only show lotteries belonging to the signed-in owner
+        return db.collection("lotteries")
+            .whereEqualTo("ownerId", ownerId)
+            .addSnapshotListener { snapshot, error ->
+
+                if (error != null) {
+                    onError(error)
+                } else {
+                    onResult(
+                        snapshot?.toObjects(Lottery::class.java) ?: emptyList()
+                    )
+                }
+            }
+    }
+
+
 }

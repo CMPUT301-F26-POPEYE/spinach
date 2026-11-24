@@ -29,6 +29,7 @@ import com.example.spinach.ui.theme.SpinachTheme
 
 private sealed interface OwnerScreen {
     data object Home : OwnerScreen
+    data object Lotteries : OwnerScreen
     data object Reservations : OwnerScreen
     data object CreateLottery : OwnerScreen
     data object SentNotifications : OwnerScreen
@@ -51,7 +52,19 @@ private fun backTarget(screen: OwnerScreen): OwnerScreen = when (screen) {
 }
 
 // The owner side of the app. campsites are the owner's own campsites.
+
+/**
+ * Main screen for campsite owners.
+ * Handles navigation between reservations, campsite settings,
+ * lottery creation, and editing existing lotteries.
+ *
+ * US 02.04.06: Added navigation for viewing and editing lotteries.
+ *
+ * Lottery editing navigation added with the help of ChatGPT, OpenAI,
+ * "CMPUT 301 Update Lottery Listing", November 24, 2026.
+ */
 @Composable
+
 fun OwnerApp(ownerId: String, campsites: List<Campsite>, modifier: Modifier = Modifier) {
     var screen by remember { mutableStateOf<OwnerScreen>(OwnerScreen.Home) }
     val current = screen
@@ -75,6 +88,8 @@ fun OwnerApp(ownerId: String, campsites: List<Campsite>, modifier: Modifier = Mo
                 onCreateLottery = { screen = OwnerScreen.CreateLottery },
                 onSentNotifications = { screen = OwnerScreen.SentNotifications },
                 onRegisterCampsite = { screen = OwnerScreen.RegisterCampsite },
+                onOpenLotteries = { screen = OwnerScreen.Lotteries },
+
                 modifier = Modifier.weight(1f),
             )
             OwnerScreen.Reservations -> OwnerReservationsScreen(
@@ -95,6 +110,12 @@ fun OwnerApp(ownerId: String, campsites: List<Campsite>, modifier: Modifier = Mo
                 existing = null,
                 onSaved = { screen = OwnerScreen.Home },
                 modifier = Modifier.weight(1f),
+            )
+            // US 02.04.06: Show lotteries the owner can edit
+            OwnerScreen.Lotteries -> OwnerLotteriesScreen(
+                ownerId = ownerId,
+                campsites = campsites,
+                modifier = Modifier.weight(1f)
             )
             is OwnerScreen.EditCampsite -> {
                 // campsites only holds this owner's campsites, so another owner's id finds nothing.
@@ -144,12 +165,22 @@ fun OwnerApp(ownerId: String, campsites: List<Campsite>, modifier: Modifier = Mo
     }
 }
 
+/**
+ * Displays the owner's home menu and registered campsites.
+ * Provides buttons for accessing the different owner features.
+ *
+ * US 02.04.06: Added the My lotteries button.
+ *
+ * Lottery navigation added with the help of ChatGPT, OpenAI,
+ * "CMPUT 301 Update Lottery Listing", November 24, 2026.
+ */
 @Composable
 private fun OwnerHomeScreen(
     campsites: List<Campsite>,
     onOpenCampsite: (Campsite) -> Unit,
     onOpenReservations: () -> Unit,
     onCreateLottery: () -> Unit,
+    onOpenLotteries: () -> Unit,
     onSentNotifications: () -> Unit,
     onRegisterCampsite: () -> Unit,
     modifier: Modifier = Modifier,
@@ -168,6 +199,16 @@ private fun OwnerHomeScreen(
         item {
             OutlinedButton(onClick = onCreateLottery, modifier = Modifier.fillMaxWidth()) {
                 Text("Create a lottery")
+            }
+        }
+
+        // US 02.04.06: Open the owner's saved lotteries
+        item {
+            OutlinedButton(
+                onClick = onOpenLotteries,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("My lotteries")
             }
         }
         item {
