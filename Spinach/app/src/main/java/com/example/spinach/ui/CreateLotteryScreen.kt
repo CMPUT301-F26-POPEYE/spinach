@@ -28,24 +28,65 @@ import com.example.spinach.LotteryRepository
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import java.util.Date
 
 // US 02.04.01, 02.04.02, 02.04.03, 02.04.04, 02.04.05, 02.04.07. Dates are typed as yyyy-MM-dd.
+
+/**
+ * Lets campsite owners create or edit a lottery.
+ * When editing, the form shows the lottery's saved information.
+ *
+ * US 02.04.06: Update an existing lottery listing.
+ *
+ * Editing functionality added with the help of ChatGPT, OpenAI,
+ * "CMPUT 301 Update Lottery Listing", November 24, 2026.
+ */
 @Composable
-fun CreateLotteryScreen(campsites: List<Campsite>, userId: String, modifier: Modifier = Modifier) {
+fun CreateLotteryScreen(campsites: List<Campsite>, userId: String, modifier: Modifier = Modifier, existing: Lottery? = null,onSaved: () -> Unit = {} ) {
+
     val repository = remember { LotteryRepository() }
-    var selected by remember { mutableStateOf(setOf<String>()) }// campsite ids ticked for this lottery
-    var registrationStart by remember { mutableStateOf("") }
-    var registrationEnd by remember { mutableStateOf("") }
-    var bookingStart by remember { mutableStateOf("") }
-    var bookingEnd by remember { mutableStateOf("") }
-    var winners by remember { mutableStateOf("") }
-    var capacity by remember { mutableStateOf("") }// optional, blank means no limit
-    var message by remember { mutableStateOf("") }
+    val editing = existing != null // checks if we're updating an existing lottery
+
+// Load saved campsites when editing, otherwise start with none selected
+    var selected by remember(existing?.id) {
+        mutableStateOf(existing?.campsites()?.toSet() ?: emptySet<String>())
+    }
+
+// Fill in the old dates when editing
+    var registrationStart by remember(existing?.id) {
+        mutableStateOf(formatDay(existing?.registrationStart ?: 0L))
+    }
+    var registrationEnd by remember(existing?.id) {
+        mutableStateOf(formatDay(existing?.registrationEnd ?: 0L))
+    }
+    var bookingStart by remember(existing?.id) {
+        mutableStateOf(formatDay(existing?.bookingStart ?: 0L))
+    }
+    var bookingEnd by remember(existing?.id) {
+        mutableStateOf(formatDay(existing?.bookingEnd ?: 0L))
+    }
+
+    var winners by remember(existing?.id) {
+        mutableStateOf(existing?.winnerCount?.toString() ?: "")
+    }
+
+    var capacity by remember(existing?.id) {
+        mutableStateOf(existing?.waitlistCapacity?.toString() ?: "")
+    }
+
+    var message by remember(existing?.id) { mutableStateOf("") }
+    var saving by remember(existing?.id) { mutableStateOf(false) }
+
 
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // Show whether this form is for creating or editing
+        Text(
+            if (editing) "Edit lottery" else "Create lottery",
+            style = MaterialTheme.typography.titleLarge
+        )
         Text("Campsites in this lottery", style = MaterialTheme.typography.titleSmall)
         if (campsites.isEmpty()) {
             Text("You have no campsites yet. Register a campsite first.")
@@ -71,30 +112,86 @@ fun CreateLotteryScreen(campsites: List<Campsite>, userId: String, modifier: Mod
         Field("Booking end (yyyy-MM-dd)", bookingEnd) { bookingEnd = it }
         Field("Number of winners", winners) { winners = it }
         Field("Waitlist capacity (optional)", capacity) { capacity = it }
+        // Drawn lotteries can't be changed
+        if (editing && existing?.drawn == true) {
+            Text("This lottery has already been drawn and cannot be edited.")
+        }
 
-        Button(onClick = {
-            if (selected.isEmpty()) {
-                message = "Select at least one campsite"
-            } else {
+
+        Button(
+            enabled = !saving && existing?.drawn != true,
+            onClick = {
+                // Check that the selected campsites still belong to this owner
                 val ids = campsites.map { it.id }.filter { it in selected }
-                val lottery = Lottery(
-                    campsiteId = ids.first(),
-                    campsiteIds = ids.toMutableList(),
-                    registrationStart = parseDay(registrationStart),
-                    registrationEnd = parseDay(registrationEnd),
-                    bookingStart = parseDay(bookingStart),
-                    bookingEnd = parseDay(bookingEnd),
-                    winnerCount = winners.toIntOrNull() ?: 0,
-                    // blank means no limit, text that is not a number becomes 0 so validation rejects it
-                    waitlistCapacity = if (capacity.isBlank()) null else (capacity.toIntOrNull() ?: 0),
-                )
-                repository.create(lottery, userId) { result ->
-                    message = result.fold({ "Lottery saved" }, { it.message ?: "Could not save" })
+
+                if (ids.isEmpty()) {
+                    message = "Select at least one campsite"
+                } else {
+                    val lottery = Lottery(
+                        id = existing?.id ?: "", // keep the document ID when editing
+                        campsiteId = ids.first(),
+                        campsiteIds = ids.toMutableList(),
+                        registrationStart = parseDay(registrationStart),
+                        registrationEnd = parseDay(registrationEnd),
+                        bookingStart = parseDay(bookingStart),
+                        bookingEnd = parseDay(bookingEnd),
+                        winnerCount = winners.toIntOrNull() ?: 0,
+                        // blank means unlimited; invalid input fails validation
+                        waitlistCapacity = if (capacity.isBlank()) {
+                            null
+                        } else {
+                            capacity.toIntOrNull() ?: 0
+                        }
+                    )
+
+                    saving = true // prevent repeated clicks while saving
+
+                    if (editing) {
+                        // Update the existing lottery in Firebase
+                        repository.update(lottery, userId) { result ->
+                            saving = false
+
+                            result.fold(
+                                onSuccess = {
+                                    message = "Lottery updated!"
+                                    onSaved()
+                                },
+                                onFailure = {
+                                    message = it.message ?: "Could not update lottery"
+                                }
+                            )
+                        }
+                    } else {
+                        // Keep the original lottery creation process
+                        repository.create(lottery, userId) { result ->
+                            saving = false
+
+                            result.fold(
+                                onSuccess = {
+                                    message = "Lottery saved!"
+                                    onSaved()
+                                },
+                                onFailure = {
+                                    message = it.message ?: "Could not save lottery"
+                                }
+                            )
+                        }
+                    }
                 }
             }
-        }) {
-            Text("Save lottery")
+        ) {
+            Text(
+                when {
+                    saving -> "Saving..."
+                    editing -> "Update lottery"
+                    else -> "Save lottery"
+                }
+            )
         }
+
+
+
+
         Text(message)
     }
 }
@@ -122,6 +219,22 @@ private fun parseDay(text: String): Long {// returns 0 when text is not a real d
     } catch (e: Exception) {
         0L
     }
+}
+
+
+/**
+ * Converts a saved lottery date into text for the edit form.
+ *
+ * Added with the help of ChatGPT, OpenAI,
+ * "CMPUT 301 Update Lottery Listing", November 24, 2026.
+ */
+private fun formatDay(time: Long): String {
+    if (time == 0L) return ""
+
+    val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    format.timeZone = TimeZone.getTimeZone("UTC")
+
+    return format.format(Date(time)) // show saved date
 }
 
 // US 02.05.01, needs to be called from MainActivity
