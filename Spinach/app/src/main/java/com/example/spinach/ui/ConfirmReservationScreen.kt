@@ -32,7 +32,10 @@ import com.example.spinach.Reservation
 import com.example.spinach.ReservationQueries
 import com.example.spinach.ReservationRepository
 import com.example.spinach.ui.theme.SpinachTheme
-
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import com.example.spinach.ExportService
 
 /**
  * ConfirmReservationScreen
@@ -42,6 +45,7 @@ import com.example.spinach.ui.theme.SpinachTheme
  *
  * To cover:
  * - US 01.05.01 As an entrant, I want to receive confirmation of my campsite reservation.
+ * - US 01.05.02 As an entrant, I want to receive confirmation of my campsite reservation by either notification or CSV.
  *
  * @param entrantId The id of the signed-in entrant (the Firebase uid, like ownerId).
  * @param lottery The lottery the entrant won.
@@ -73,16 +77,33 @@ fun ConfirmReservationScreen(
     var rulesText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmation by remember { mutableStateOf<String?>(null) }
+    var locations by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var confirmed by remember { mutableStateOf<Reservation?>(null) }
+    var exportStatus by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(ExportService.MIME_TYPE)
+    ) { uri ->
+        val reservation = confirmed
+        if (uri != null && reservation != null) {
+            val csv = ExportService.toCsv(listOf(reservation)) { id -> locations[id].orEmpty() }
+            ExportService.writeTo(context.contentResolver, uri, csv)
+                .onSuccess { exportStatus = "Reservation saved as CSV" }
+                .onFailure { exportStatus = it.message ?: "Could not save the CSV" }
+        }
+    }
 
     // the reservation stores the campsite name, so load the names of the lottery's campsites
     LaunchedEffect(lottery.id) {
-        names = campsiteIds.associateWith { id ->
+        val loaded = campsiteIds.associateWith { id ->
             try {
-                campsiteRepository.getCampsite(id)?.name.orEmpty()
+                campsiteRepository.getCampsite(id)
             } catch (e: Exception) {
-                ""
+                null
             }
         }
+        names = loaded.mapValues { it.value?.name.orEmpty() }
+        locations = loaded.mapValues { it.value?.location.orEmpty() }
     }
 
     // US 02.06.01: dates of the chosen campsite that other reservations already took
@@ -135,6 +156,7 @@ fun ConfirmReservationScreen(
                 result
                     .onSuccess {
                         confirmation = EntrantReservationRules.confirmationMessage(reservation)
+                        confirmed = reservation
                         error = null
                     }
                     .onFailure {
@@ -143,6 +165,8 @@ fun ConfirmReservationScreen(
                     }
             }
         },
+        exportStatus = exportStatus,
+        onExport = { exportLauncher.launch(ExportService.DEFAULT_FILE_NAME) },
         modifier = modifier,
     )
 }
@@ -165,6 +189,8 @@ fun ConfirmReservationContent(
     confirmation: String?,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
+    exportStatus: String? = null,
+    onExport: () -> Unit = {},
 ) {
     LazyColumn(modifier = modifier.fillMaxWidth()) {
         item {
@@ -189,6 +215,12 @@ fun ConfirmReservationContent(
                             style = MaterialTheme.typography.titleSmall,
                         )
                         Text(text = confirmation, style = MaterialTheme.typography.bodyMedium)
+                        Button(onClick = onExport, modifier = Modifier.padding(top = 8.dp)) {
+                            Text("Download CSV")
+                        }
+                        if (exportStatus != null) {
+                            Text(text = exportStatus, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
